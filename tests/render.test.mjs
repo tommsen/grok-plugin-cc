@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  renderProposalResult,
   renderReviewResult,
   renderSetupReport,
   renderStatusReport,
@@ -10,6 +11,41 @@ import {
   renderTestGapsResult,
   renderTransferResult
 } from "../plugins/grok/scripts/lib/render.mjs";
+
+test("renderProposalResult says nothing was applied and how to apply", () => {
+  const proposal = {
+    summary: "Change the log text.",
+    patch: "diff --git a/app.js b/app.js\n",
+    tests_to_run: ["node app.js"],
+    risks: ["None known."]
+  };
+  const ok = renderProposalResult(
+    {
+      parsed: { result: proposal, rawOutput: "", parseError: null },
+      check: { patchFile: "/s/jobs/task-1.patch", ok: true, output: "", stat: " app.js | 2 +-" },
+      grokSessionId: "s1",
+      warning: null
+    },
+    { jobId: "task-1" }
+  );
+  assert.match(ok, /grok changed no file/);
+  assert.match(ok, /git apply --check: OK — not applied yet/);
+  assert.match(ok, /git apply "\/s\/jobs\/task-1\.patch"/);
+  assert.match(ok, /`node app\.js`/);
+  assert.match(ok, /None known\./);
+
+  const failed = renderProposalResult(
+    {
+      parsed: { result: proposal, rawOutput: "", parseError: null },
+      check: { patchFile: "/s/jobs/task-2.patch", ok: false, output: "error: patch failed: app.js:1", stat: "" },
+      grokSessionId: null,
+      warning: null
+    },
+    { jobId: "task-2" }
+  );
+  assert.match(failed, /git apply --check: FAILED — error: patch failed/);
+  assert.match(failed, /Do not apply this patch/);
+});
 
 test("renderTestGapsResult marks every gap as a prediction", () => {
   const rendered = renderTestGapsResult(

@@ -69,6 +69,16 @@ test("task-write mode uses the workspace sandbox", () => {
   assert.equal(pairValue(args, "--effort"), "high");
 });
 
+// Proposal runs must not be able to write at all: no shell, no edit tools,
+// the same allowlist as reviews. The sandbox is irrelevant here.
+test("task-propose mode uses the read-only review allowlist and no shell", () => {
+  const args = buildHeadlessArgs({ prompt: "propose", mode: "task-propose", jsonSchema: { type: "object" }, sandboxEnforced: true });
+  assert.equal(pairValue(args, "--tools"), REVIEW_TOOL_ALLOWLIST);
+  assert.ok(args.includes("--always-approve"));
+  assert.equal(args.includes("--sandbox"), false);
+  assert.equal(args.includes("--disallowed-tools"), false);
+});
+
 // Without a kernel enforcer grok refuses to start rather than warning, so a
 // flag we cannot back up is a flag we must not send. #1.
 test("task-read drops the sandbox when the enforcer is missing, and keeps the deny list", () => {

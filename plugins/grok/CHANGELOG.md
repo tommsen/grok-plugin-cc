@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Grok can implement without writing.
+
+- New `task --propose` / `/grok:rescue --propose`: Grok runs with the review
+  allowlist (no shell, no edit tools) and returns a unified diff. The companion
+  stores it, dry-runs `git apply --check`, and applies nothing; Claude reviews,
+  applies and tests. A patch that does not apply fails the run.
+- The `grok:delegate` skill uses proposals for implementation tasks by default;
+  `--write` stays for when Grok itself should edit files.
+
 Grok as an adversary to the tests.
 
 - New `/grok:test-gaps`: predicts mutations of the change that every test would

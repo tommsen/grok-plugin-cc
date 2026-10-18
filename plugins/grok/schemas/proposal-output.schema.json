@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "patch", "tests_to_run", "risks"],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1 },
+    "patch": { "type": "string" },
+    "tests_to_run": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "risks": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

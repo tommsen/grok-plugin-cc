@@ -42,10 +42,21 @@ only forwards one Bash call cost about 200,000 Claude tokens per run (measured
    node "${CLAUDE_PLUGIN_ROOT}/scripts/grok-companion.mjs" task --prompt-file "<path>"
    ```
 
-   - Add `--write` **only** when the user explicitly asked Grok to change files.
-     Without it the edit tools are removed and the OS sandbox is read-only
+   For an implementation task, the default is a proposal - Grok returns a
+   patch and changes no file:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/scripts/grok-companion.mjs" task --propose --prompt-file "<path>"
+   ```
+
+   - Use `--write` only when the user explicitly wants Grok itself to edit
+     files; otherwise use `--propose` for any change. `--propose` and `--write`
+     exclude each other.
+   - Without `--write` the edit tools are removed and the OS sandbox is read-only
      where the platform can enforce it, but Grok keeps its shell - so the
-     request itself must say "Read only. Do not modify any file."
+     request itself must say "Read only. Do not modify any file." The same line
+     belongs in a `--propose` request: a proposal run has no shell and no edit
+     tools, and the line keeps the request consistent with that.
    - Add `--resume-last` to continue the previous Grok task of this repository.
    - Leave `--model` and `--effort` unset unless the user names them.
 3. Foreground or background:
@@ -60,6 +71,13 @@ only forwards one Bash call cost about 200,000 Claude tokens per run (measured
 4. A non-zero exit means Grok failed, even if some text came back. A
    `Cancelled` run usually means the sign-in is broken: tell the user to run
    `/grok:setup`; never run `grok login` yourself.
+
+## Applying a proposal
+
+1. The output names the patch file and the result of `git apply --check`. Nothing has been applied.
+2. Read the patch. Check it against the request and the project's rules. Reject it if it touches files the task did not ask for, guesses at code it did not read, or weakens tests.
+3. Only if the check was OK and the patch is right: `git apply "<patch file>"`, then run the listed tests (and the project's own suite).
+4. Report what you applied, the test results, and what you rejected and why. A failed check or a wrong patch is not applied: resume Grok with `--resume-last --propose` and say what is wrong, or make the change yourself.
 
 ## Cost
 

@@ -251,6 +251,58 @@ test("test-gaps runs a review with its own schema and prompt", () => {
   assert.match(text.stdout, /Drop the log call/);
 });
 
+function proposalOutput(patch) {
+  const proposal = { summary: "Change the log text.", patch, tests_to_run: ["node app.js"], risks: [] };
+  return JSON.stringify({ text: JSON.stringify(proposal), structuredOutput: proposal, stopReason: "end_turn", sessionId: "s-prop" });
+}
+
+const PROPOSED_PATCH = [
+  "diff --git a/app.js b/app.js",
+  "--- a/app.js",
+  "+++ b/app.js",
+  "@@ -1 +1 @@",
+  "-console.log('before');",
+  "+console.log('after');",
+  ""
+].join("\n");
+
+test("task --propose stores a checked patch and changes no file", () => {
+  fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('before');\n");
+  const payload = runJson(["task", "--propose", "change", "the", "log", "text"], { FAKE_GROK_JSON_OUTPUT: proposalOutput(PROPOSED_PATCH) });
+
+  assert.equal(payload.check.ok, true, payload.check.output);
+  assert.equal(fs.readFileSync(payload.patchFile, "utf8"), PROPOSED_PATCH);
+  assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\n", "the companion must not apply");
+
+  const call = [...fake.readCalls()].reverse().find((c) => c.includes("--json-schema"));
+  assert.equal(call[call.indexOf("--tools") + 1], "read_file,grep,list_dir");
+  assert.equal(call.includes("--sandbox"), false);
+  assert.match(call[call.indexOf("--json-schema") + 1], /tests_to_run/);
+  const prompt = call[call.indexOf("-p") + 1];
+  assert.match(prompt, /unified diff/i);
+  assert.match(prompt, /change the log text/);
+});
+
+test("task --propose fails when the patch does not apply", () => {
+  fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('before');\n");
+  const broken = PROPOSED_PATCH.replace("-console.log('before');", "-console.log('nope');");
+  const result = runCompanion(["task", "--propose", "change", "it", "--json"], {
+    cwd: repoDir,
+    env: { ...baseEnv, FAKE_GROK_JSON_OUTPUT: proposalOutput(broken) }
+  });
+  assert.notEqual(result.status, 0);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.check.ok, false);
+  assert.match(payload.check.output, /patch/i);
+  assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\n");
+});
+
+test("task refuses --propose together with --write", () => {
+  const result = runCompanion(["task", "--propose", "--write", "do", "it"], { cwd: repoDir, env: baseEnv });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--propose or --write/);
+});
+
 test("a cancelled grok run makes the companion exit non-zero", () => {
   const result = runCompanion(["task", "look", "around", "--json"], {
     cwd: repoDir,

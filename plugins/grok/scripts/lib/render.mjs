@@ -185,6 +185,60 @@ export function renderTaskResult({ rawOutput, failureMessage, grokSessionId, war
   return `${lines.join("\n")}\n`;
 }
 
+// Nothing has been applied when this is shown; the reader decides. The last
+// line says so explicitly, in both outcomes.
+export function renderProposalResult({ parsed, check, grokSessionId, warning = null }, { jobId }) {
+  const lines = [heading("Grok Proposal"), ""];
+  if (jobId) {
+    lines.push(`Job: ${jobId}`);
+  }
+  lines.push("Mode: proposal — grok changed no file");
+  if (grokSessionId) {
+    lines.push(`Grok session: ${grokSessionId} (resume with \`grok --resume ${grokSessionId}\`)`);
+  }
+  if (warning) {
+    lines.push(`Warning: ${warning}`);
+  }
+  lines.push("");
+
+  if (parsed.parseError) {
+    lines.push(`Grok did not return a valid proposal: ${parsed.parseError}`, "");
+    if (parsed.rawOutput) {
+      lines.push("Raw output:", "", "```", parsed.rawOutput.trim(), "```");
+    }
+    return `${lines.join("\n")}\n`;
+  }
+
+  const proposal = parsed.result;
+  lines.push(proposal.summary, "");
+  if (check) {
+    lines.push(`Patch file: ${check.patchFile}`);
+    lines.push(check.ok ? "git apply --check: OK — not applied yet" : `git apply --check: FAILED — ${check.output}`);
+    if (check.stat) {
+      lines.push("", "```", check.stat, "```");
+    }
+  }
+  if (proposal.tests_to_run?.length) {
+    lines.push("", heading("Tests to run"), "");
+    for (const command of proposal.tests_to_run) {
+      lines.push(`- \`${command}\``);
+    }
+  }
+  if (proposal.risks?.length) {
+    lines.push("", heading("Risks to check"), "");
+    for (const risk of proposal.risks) {
+      lines.push(`- ${risk}`);
+    }
+  }
+  lines.push(
+    "",
+    check?.ok
+      ? `Review the patch, then apply it with \`git apply "${check.patchFile}"\`.`
+      : "Do not apply this patch. Ask grok to fix it (`--resume-last`) or change it yourself."
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 export function renderStatusReport(snapshot) {
   const lines = [heading("Grok Jobs"), ""];
   if (!snapshot.jobs.length) {

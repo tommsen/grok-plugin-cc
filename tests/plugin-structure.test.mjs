@@ -139,6 +139,23 @@ test("delegate skill tells Claude to call the companion through Bash, read-only 
   assert.doesNotMatch(body, /subagent_type/);
 });
 
+test("rescue and the delegate skill offer the proposal mode", () => {
+  const rescue = parseFrontmatter(path.join(PLUGIN_ROOT, "commands", "rescue.md")).body;
+  assert.match(rescue, /--propose/);
+  assert.match(rescue, /git apply/);
+  const skill = parseFrontmatter(path.join(PLUGIN_ROOT, "skills", "delegate", "SKILL.md")).body;
+  assert.match(skill, /task --propose --prompt-file/);
+  assert.match(skill, /git apply --check/);
+});
+
+test("proposal schema and prompt carry the contract the companion relies on", () => {
+  const schema = JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, "schemas", "proposal-output.schema.json"), "utf8"));
+  assert.deepEqual(schema.required, ["summary", "patch", "tests_to_run", "risks"]);
+  const template = fs.readFileSync(path.join(PLUGIN_ROOT, "prompts", "proposal.md"), "utf8");
+  assert.ok(template.includes("{{TASK}}"));
+  assert.match(template, /<project_rules>[\s\S]*CLAUDE\.md[\s\S]*AGENTS\.md/);
+});
+
 // The prose may mention --write as an opt-in, but no command line Claude would
 // copy may carry it: ask is read-only by contract, the delegate skill opt-in only.
 function bashBlocks(body) {

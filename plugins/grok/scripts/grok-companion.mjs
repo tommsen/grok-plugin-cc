@@ -32,15 +32,17 @@ import {
   runTrackedJob,
   sortJobsNewestFirst
 } from "./lib/jobs.mjs";
-import { binaryAvailable, terminateProcessTree } from "./lib/process.mjs";
+import { binaryAvailable, formatCommandFailure, runCommand, terminateProcessTree } from "./lib/process.mjs";
 import { interpolateTemplate, loadPromptTemplate } from "./lib/prompts.mjs";
 import {
+  ensureStateDir,
   listJobs,
   nowIso,
+  resolveJobsDir,
   upsertJob,
   writeJobFile
 } from "./lib/state.mjs";
-import { renderCancelReport, renderJobStatusReport, renderReviewResult, renderSetupReport, renderStatusReport, renderStoredJobResult, renderTaskResult, renderTestGapsResult, renderTransferResult } from "./lib/render.mjs";
+import { renderCancelReport, renderJobStatusReport, renderProposalResult, renderReviewResult, renderSetupReport, renderStatusReport, renderStoredJobResult, renderTaskResult, renderTestGapsResult, renderTransferResult } from "./lib/render.mjs";
 import { resolveClaudeSessionPath } from "./lib/transfer.mjs";
 import { resolveWorkspaceRoot } from "./lib/workspace.mjs";
 
@@ -48,6 +50,7 @@ const ROOT_DIR = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const SCHEMAS_DIR = path.join(ROOT_DIR, "schemas");
 const VALID_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const DEFAULT_CONTINUE_PROMPT = "Continue the previous task from where it stopped.";
+const PROPOSAL_SCHEMA_NAME = "proposal-output";
 
 function printUsage() {
   console.log(
@@ -57,7 +60,7 @@ function printUsage() {
       "  node scripts/grok-companion.mjs review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs adversarial-review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs test-gaps [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
-      "  node scripts/grok-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
+      "  node scripts/grok-companion.mjs task [--background] [--write|--propose] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [--prompt-file <path>] [prompt]",
       "  node scripts/grok-companion.mjs transfer [--source <claude-jsonl>] [--json]",
       "  node scripts/grok-companion.mjs status [job-id] [--all] [--json]",
       "  node scripts/grok-companion.mjs result [job-id] [--json]",
@@ -296,8 +299,8 @@ async function handleReviewCommand(argv, config) {
 
 // --- task ----------------------------------------------------------------
 
-function buildTaskRunMetadata({ prompt, resumeLast }) {
-  const title = resumeLast ? "Grok Resume" : "Grok Task";
+function buildTaskRunMetadata({ prompt, resumeLast, propose = false }) {
+  const title = propose ? "Grok Proposal" : resumeLast ? "Grok Resume" : "Grok Task";
   return {
     title,
     summary: shorten(prompt || (resumeLast ? DEFAULT_CONTINUE_PROMPT : "Task"))
@@ -314,10 +317,9 @@ function resolveLatestTaskGrokSession(workspaceRoot, options = {}) {
   return findLatestResumableTaskJob(visibleJobs)?.grokSessionId ?? null;
 }
 
-async function executeTaskRun(request) {
-  const workspaceRoot = resolveWorkspaceRoot(request.cwd);
-  ensureGrokAvailable(request.cwd);
-
+// Shared by plain tasks and proposals: find the session to resume and make
+// sure there is something to send.
+function resolveTaskResumeSession(request, workspaceRoot) {
   let resumeSessionId = null;
   if (request.resumeLast) {
     resumeSessionId = resolveLatestTaskGrokSession(workspaceRoot, { excludeJobId: request.jobId });
@@ -325,10 +327,19 @@ async function executeTaskRun(request) {
       throw new Error("No previous Grok task session was found for this repository.");
     }
   }
-
   if (!request.prompt && !resumeSessionId) {
     throw new Error("Provide a prompt, a prompt file, or use --resume-last.");
   }
+  return resumeSessionId;
+}
+
+async function executeTaskRun(request) {
+  if (request.propose) {
+    return executeProposalRun(request);
+  }
+  const workspaceRoot = resolveWorkspaceRoot(request.cwd);
+  ensureGrokAvailable(request.cwd);
+  const resumeSessionId = resolveTaskResumeSession(request, workspaceRoot);
 
   const result = await runGrokHeadless(workspaceRoot, {
     prompt: request.prompt || DEFAULT_CONTINUE_PROMPT,
@@ -364,6 +375,74 @@ async function executeTaskRun(request) {
   };
 }
 
+// Proposal mode (user decision 2026-10-18): grok writes nothing. It reads the
+// tree with the review tools and hands back a unified diff. The companion
+// stores it next to the job and dry-runs it with `git apply --check`; applying
+// is left to Claude after it has reviewed the patch.
+function checkProposedPatch(workspaceRoot, jobId, patch) {
+  ensureStateDir(workspaceRoot);
+  const patchFile = path.join(resolveJobsDir(workspaceRoot), `${jobId}.patch`);
+  const text = String(patch ?? "");
+  fs.writeFileSync(patchFile, text === "" || text.endsWith("\n") ? text : `${text}\n`, "utf8");
+  if (!text.trim()) {
+    return { patchFile, ok: false, output: "grok proposed an empty patch.", stat: "" };
+  }
+  const check = runCommand("git", ["apply", "--check", patchFile], { cwd: workspaceRoot });
+  const stat = runCommand("git", ["apply", "--stat", patchFile], { cwd: workspaceRoot });
+  return {
+    patchFile,
+    ok: !check.error && check.status === 0,
+    output: !check.error && check.status === 0 ? "" : check.error?.message ?? formatCommandFailure(check),
+    stat: stat.status === 0 ? String(stat.stdout ?? "").trim() : ""
+  };
+}
+
+async function executeProposalRun(request) {
+  const workspaceRoot = resolveWorkspaceRoot(request.cwd);
+  ensureGrokAvailable(request.cwd);
+  const resumeSessionId = resolveTaskResumeSession(request, workspaceRoot);
+
+  const template = loadPromptTemplate(ROOT_DIR, "proposal");
+  const result = await runGrokHeadless(workspaceRoot, {
+    prompt: interpolateTemplate(template, { TASK: request.prompt || DEFAULT_CONTINUE_PROMPT }),
+    model: request.model,
+    effort: request.effort,
+    resumeSessionId,
+    mode: "task-propose",
+    jsonSchema: readReviewSchema(PROPOSAL_SCHEMA_NAME),
+    onProgress: request.onProgress
+  });
+
+  const parsed = parseStructuredOutput(result);
+  const jobId = request.jobId ?? `proposal-${Date.now()}`;
+  const check = parsed.result ? checkProposedPatch(workspaceRoot, jobId, parsed.result.patch) : null;
+  // A patch that does not apply is a failed run: Claude must not treat it as done.
+  const failed = result.status !== 0 || !parsed.result || !check.ok;
+
+  return {
+    exitStatus: failed ? result.status || 1 : 0,
+    grokSessionId: result.sessionId,
+    payload: {
+      status: result.status,
+      stopReason: result.stopReason,
+      warning: result.warning,
+      grokSessionId: result.sessionId,
+      proposal: parsed.result,
+      parseError: parsed.parseError,
+      patchFile: check?.patchFile ?? null,
+      check: check ? { ok: check.ok, output: check.output, stat: check.stat } : null
+    },
+    rendered: renderProposalResult(
+      { parsed, check, grokSessionId: result.sessionId, warning: result.warning },
+      { jobId: request.jobId ?? null }
+    ),
+    summary: parsed.result?.summary ?? parsed.parseError ?? "Grok proposal finished.",
+    jobTitle: "Grok Proposal",
+    jobClass: "task",
+    write: false
+  };
+}
+
 function readTaskPrompt(cwd, options, positionals) {
   if (options["prompt-file"]) {
     return fs.readFileSync(path.resolve(cwd, options["prompt-file"]), "utf8");
@@ -387,7 +466,7 @@ function spawnDetachedTaskWorker(cwd, jobId) {
 async function handleTask(argv) {
   const { options, positionals } = parseCommandInput(argv, {
     valueOptions: ["model", "effort", "cwd", "prompt-file"],
-    booleanOptions: ["json", "write", "resume-last", "resume", "fresh", "background"]
+    booleanOptions: ["json", "write", "propose", "resume-last", "resume", "fresh", "background"]
   });
 
   const cwd = resolveCommandCwd(options);
@@ -399,8 +478,12 @@ async function handleTask(argv) {
   if (resumeLast && options.fresh) {
     throw new Error("Choose either --resume/--resume-last or --fresh.");
   }
+  if (options.propose && options.write) {
+    throw new Error("Choose either --propose or --write: a proposal never writes files.");
+  }
+  const propose = Boolean(options.propose);
   const write = Boolean(options.write);
-  const taskMetadata = buildTaskRunMetadata({ prompt, resumeLast });
+  const taskMetadata = buildTaskRunMetadata({ prompt, resumeLast, propose });
 
   const job = createJobRecord({
     prefix: "task",
@@ -418,6 +501,7 @@ async function handleTask(argv) {
     effort,
     prompt,
     write,
+    propose,
     resumeLast,
     jobId: job.id
   };

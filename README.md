@@ -155,6 +155,14 @@ Hands a task to Grok. Claude writes the request to a file and calls the companio
 
 You can also just ask: "Ask Grok to redesign the database connection to be more resilient." The `grok:delegate` skill then makes the same direct call.
 
+#### Proposals: Grok implements, Claude applies
+
+```bash
+/grok:rescue --propose fix the off-by-one in lib/jobs.mjs
+```
+
+With `--propose` Grok runs with the review allowlist (`read_file`, `grep`, `list_dir` — no shell, no edit tools) and returns a unified diff instead of editing. The companion stores it next to the job, dry-runs it with `git apply --check`, and applies nothing. Claude then reviews the patch, applies it with `git apply`, and runs the tests. A patch that does not apply makes the run fail. `--propose` and `--write` are mutually exclusive; the `grok:delegate` skill uses `--propose` for implementation tasks unless you ask Grok to edit files itself.
+
 ### `/grok:ask`
 
 A read-only second opinion. Claude writes the question with the relevant paths to a file, Grok reads the repository itself, and Claude weighs the answer — agreeing, disagreeing, and checking every claim about the code against the code.

@@ -220,6 +220,12 @@ export function buildHeadlessArgs(options = {}) {
       args.push("--tools", REVIEW_TOOL_ALLOWLIST);
       args.push("--always-approve");
       break;
+    case "task-propose":
+      // Proposal runs hand back a patch instead of editing: the review
+      // allowlist (no shell, no edit tools) holds without any OS sandbox.
+      args.push("--tools", REVIEW_TOOL_ALLOWLIST);
+      args.push("--always-approve");
+      break;
     case "task-read":
       // The deny list is the primary guard here and does not need the kernel,
       // so a machine without the enforcer still runs -- with one belt instead
