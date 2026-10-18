@@ -28,5 +28,6 @@ Return only valid JSON matching the provided schema:
 
 <grounding_rules>
 Base every hunk on file content you actually read in this session; never guess context lines or line numbers.
-If the task cannot be solved safely, return an empty `patch` and explain why in `summary` and `risks`.
+Read the files you change with your tools before you answer. A plan, an intention or a progress note ("I'll read the files, then propose...") is not an answer: answer only when the patch is ready.
+An empty `patch` is allowed only after you have read the relevant files and found that the task cannot be solved safely; then explain why in `summary` and `risks`.
 </grounding_rules>

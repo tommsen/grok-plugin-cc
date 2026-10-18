@@ -297,6 +297,16 @@ test("task --propose fails when the patch does not apply", () => {
   assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\n");
 });
 
+// Measured 2026-10-18 (git 2.54): a CRLF file in the work tree and an LF patch
+// make a plain `git apply --check` fail; --ignore-whitespace lets it pass.
+test("task --propose accepts an LF patch for a CRLF work-tree file", () => {
+  fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('before');\r\n");
+  const payload = runJson(["task", "--propose", "change", "the", "log", "text"], { FAKE_GROK_JSON_OUTPUT: proposalOutput(PROPOSED_PATCH) });
+
+  assert.equal(payload.check.ok, true, payload.check.output);
+  assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\r\n", "the companion must not apply");
+});
+
 test("task refuses --propose together with --write", () => {
   const result = runCompanion(["task", "--propose", "--write", "do", "it"], { cwd: repoDir, env: baseEnv });
   assert.equal(result.status, 1);

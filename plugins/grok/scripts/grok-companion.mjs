@@ -387,8 +387,13 @@ function checkProposedPatch(workspaceRoot, jobId, patch) {
   if (!text.trim()) {
     return { patchFile, ok: false, output: "grok proposed an empty patch.", stat: "" };
   }
-  const check = runCommand("git", ["apply", "--check", patchFile], { cwd: workspaceRoot });
-  const stat = runCommand("git", ["apply", "--stat", patchFile], { cwd: workspaceRoot });
+  // --ignore-whitespace: grok writes LF diffs. Measured 2026-10-18 (git
+  // 2.54.0.windows.1): with the file committed as CRLF and autocrlf=false,
+  // `git apply --check` fails for such a patch ("patch does not apply") and
+  // passes with --ignore-whitespace. A normal Windows checkout (autocrlf=true)
+  // passes either way, so the flag only widens what is accepted.
+  const check = runCommand("git", ["apply", "--check", "--ignore-whitespace", patchFile], { cwd: workspaceRoot });
+  const stat = runCommand("git", ["apply", "--stat", "--ignore-whitespace", patchFile], { cwd: workspaceRoot });
   return {
     patchFile,
     ok: !check.error && check.status === 0,
@@ -433,7 +438,14 @@ async function executeProposalRun(request) {
       check: check ? { ok: check.ok, output: check.output, stat: check.stat } : null
     },
     rendered: renderProposalResult(
-      { parsed, check, grokSessionId: result.sessionId, warning: result.warning },
+      {
+        parsed,
+        check,
+        grokSessionId: result.sessionId,
+        warning: result.warning,
+        // The view must not say "apply it" when the exit code says the run failed.
+        failure: result.status !== 0 ? result.error?.message ?? `grok exited with status ${result.status}` : null
+      },
       { jobId: request.jobId ?? null }
     ),
     summary: parsed.result?.summary ?? parsed.parseError ?? "Grok proposal finished.",

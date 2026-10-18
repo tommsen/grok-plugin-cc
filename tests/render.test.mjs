@@ -30,7 +30,7 @@ test("renderProposalResult says nothing was applied and how to apply", () => {
   );
   assert.match(ok, /grok changed no file/);
   assert.match(ok, /git apply --check: OK — not applied yet/);
-  assert.match(ok, /git apply "\/s\/jobs\/task-1\.patch"/);
+  assert.match(ok, /git apply --ignore-whitespace "\/s\/jobs\/task-1\.patch"/);
   assert.match(ok, /`node app\.js`/);
   assert.match(ok, /None known\./);
 
@@ -45,6 +45,23 @@ test("renderProposalResult says nothing was applied and how to apply", () => {
   );
   assert.match(failed, /git apply --check: FAILED — error: patch failed/);
   assert.match(failed, /Do not apply this patch/);
+  assert.match(failed, /--resume-last --propose/);
+
+  // A run that failed (non-zero grok status) must not invite applying, even
+  // when the patch itself checked out.
+  const reportedFailure = renderProposalResult(
+    {
+      parsed: { result: proposal, rawOutput: "", parseError: null },
+      check: { patchFile: "/s/jobs/task-3.patch", ok: true, output: "", stat: " app.js | 2 +-" },
+      grokSessionId: "s3",
+      warning: null,
+      failure: "max turns reached"
+    },
+    { jobId: "task-3" }
+  );
+  assert.match(reportedFailure, /Grok reported a failure: max turns reached/);
+  assert.match(reportedFailure, /Do not apply this patch/);
+  assert.doesNotMatch(reportedFailure, /Review the patch, then apply it/);
 });
 
 test("renderTestGapsResult marks every gap as a prediction", () => {

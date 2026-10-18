@@ -161,7 +161,7 @@ You can also just ask: "Ask Grok to redesign the database connection to be more 
 /grok:rescue --propose fix the off-by-one in lib/jobs.mjs
 ```
 
-With `--propose` Grok runs with the review allowlist (`read_file`, `grep`, `list_dir` — no shell, no edit tools) and returns a unified diff instead of editing. The companion stores it next to the job, dry-runs it with `git apply --check`, and applies nothing. Claude then reviews the patch, applies it with `git apply`, and runs the tests. A patch that does not apply makes the run fail. `--propose` and `--write` are mutually exclusive; the `grok:delegate` skill uses `--propose` for implementation tasks unless you ask Grok to edit files itself.
+With `--propose` Grok runs with the review allowlist (`read_file`, `grep`, `list_dir` — no shell, no edit tools) and returns a unified diff instead of editing. The companion stores it next to the job, dry-runs it with `git apply --check`, and applies nothing. Claude then reviews the patch, applies it with `git apply --ignore-whitespace` (so an LF patch also fits CRLF files), and runs the tests. A patch that does not apply makes the run fail. The proposal prompt requires Grok to read the files before it answers; a progress note with an empty patch counts as a failed run. Claude runs only test commands it would choose itself and rejects proposals that list commands which install, download, or write outside the repository. A follow-up with `--resume-last --propose` keeps the no-shell allowlist (measured 2026-10-18). `--propose` and `--write` are mutually exclusive; the `grok:delegate` skill uses `--propose` for implementation tasks unless you ask Grok to edit files itself.
 
 ### `/grok:ask`
 

@@ -154,6 +154,20 @@ test("proposal schema and prompt carry the contract the companion relies on", ()
   const template = fs.readFileSync(path.join(PLUGIN_ROOT, "prompts", "proposal.md"), "utf8");
   assert.ok(template.includes("{{TASK}}"));
   assert.match(template, /<project_rules>[\s\S]*CLAUDE\.md[\s\S]*AGENTS\.md/);
+  // Measured 2026-10-18: one real run answered with a progress note and an empty patch.
+  assert.match(template, /<grounding_rules>[\s\S]*progress note[\s\S]*empty `patch` is allowed only after/);
+});
+
+test("proposal hand-over uses the proposal line, the CRLF-safe apply and the test-command check", () => {
+  const rescue = parseFrontmatter(path.join(PLUGIN_ROOT, "commands", "rescue.md")).body;
+  const skill = parseFrontmatter(path.join(PLUGIN_ROOT, "skills", "delegate", "SKILL.md")).body;
+  // The skill wraps its lines; compare on collapsed whitespace.
+  for (const body of [rescue, skill].map((text) => text.replace(/\s+/g, " "))) {
+    assert.match(body, /You cannot modify files\. Deliver the complete change as a unified diff in the patch field\./);
+    assert.match(body, /git apply --ignore-whitespace "<patch file>"/);
+    assert.match(body, /installs, downloads, or writes outside the repository/);
+    assert.match(body, /`package\.json` script/);
+  }
 });
 
 // The prose may mention --write as an opt-in, but no command line Claude would

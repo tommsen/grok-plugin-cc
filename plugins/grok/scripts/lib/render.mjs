@@ -187,7 +187,7 @@ export function renderTaskResult({ rawOutput, failureMessage, grokSessionId, war
 
 // Nothing has been applied when this is shown; the reader decides. The last
 // line says so explicitly, in both outcomes.
-export function renderProposalResult({ parsed, check, grokSessionId, warning = null }, { jobId }) {
+export function renderProposalResult({ parsed, check, grokSessionId, warning = null, failure = null }, { jobId }) {
   const lines = [heading("Grok Proposal"), ""];
   if (jobId) {
     lines.push(`Job: ${jobId}`);
@@ -203,6 +203,9 @@ export function renderProposalResult({ parsed, check, grokSessionId, warning = n
 
   if (parsed.parseError) {
     lines.push(`Grok did not return a valid proposal: ${parsed.parseError}`, "");
+    if (failure) {
+      lines.push(`Grok reported a failure: ${failure}`, "");
+    }
     if (parsed.rawOutput) {
       lines.push("Raw output:", "", "```", parsed.rawOutput.trim(), "```");
     }
@@ -230,11 +233,14 @@ export function renderProposalResult({ parsed, check, grokSessionId, warning = n
       lines.push(`- ${risk}`);
     }
   }
+  if (failure) {
+    lines.push("", `Grok reported a failure: ${failure}`);
+  }
   lines.push(
     "",
-    check?.ok
-      ? `Review the patch, then apply it with \`git apply "${check.patchFile}"\`.`
-      : "Do not apply this patch. Ask grok to fix it (`--resume-last`) or change it yourself."
+    check?.ok && !failure
+      ? `Review the patch, then apply it with \`git apply --ignore-whitespace "${check.patchFile}"\`.`
+      : "Do not apply this patch. Ask grok to fix it (`--resume-last --propose`) or change it yourself."
   );
   return `${lines.join("\n")}\n`;
 }
