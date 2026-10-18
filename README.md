@@ -25,8 +25,8 @@ This is the Grok counterpart to OpenAI's [codex-plugin-cc](https://github.com/op
 - `/grok:adversarial-review` — a steerable challenge review that attacks the design, not just the code
 - `/grok:test-gaps` — predicts which mutations of your change the tests would let through, for Claude to verify by running them
 - `/grok:rescue` — delegate investigation or fixes to Grok, foreground or background, resumable across calls; called directly through Bash, no subagent
-- `/grok:ask` — a read-only second opinion on a question; Claude weighs and verifies the answer
-- Skill `grok:delegate` — lets Claude hand work to Grok on its own initiative the same cheap way (request as a file, read-only unless asked)
+- `/grok:ask` — a second opinion on a question (no edit tools; Grok keeps its shell and is read-only by instruction); Claude weighs and verifies the answer
+- Skill `grok:delegate` — lets Claude hand work to Grok on its own initiative the same cheap way (request as a file, no edit tools unless asked)
 - `/grok:transfer` — import the current Claude Code conversation into Grok and continue it there
 - `/grok:status`, `/grok:result`, `/grok:cancel` — job control for background work
 - `/grok:setup` — prerequisite and auth checks
@@ -165,7 +165,7 @@ With `--propose` Grok runs with the review allowlist (`read_file`, `grep`, `list
 
 ### `/grok:ask`
 
-A read-only second opinion. Claude writes the question with the relevant paths to a file, Grok reads the repository itself, and Claude weighs the answer — agreeing, disagreeing, and checking every claim about the code against the code.
+A second opinion without edit tools: Grok keeps its shell and is read-only by instruction only (the request says so; the tool deny list removes the edit tools). Claude writes the question with the relevant paths to a file, Grok reads the repository itself, and Claude weighs the answer — agreeing, disagreeing, and checking every claim about the code against the code.
 
 ```bash
 /grok:ask Is the retry loop in lib/jobs.mjs safe when two workers start at once?
@@ -219,7 +219,7 @@ The asymmetry is deliberate. A read-leaning rescue's primary guard is the tool d
 
 Override the probe with `GROK_COMPANION_SANDBOX=on|off` if your distro enforces through something we do not recognise, or if you have decided to accept the risk.
 
-**MCP servers are blocked in every mode.** `--tools` only allowlists Grok's *built-in* tools. Measured on 2026-10-18 (grok 1.0.46): with `--tools read_file,grep,list_dir` Grok still listed `search_tool` and `use_tool`, and `search_tool` returned tools of the MCP servers configured in the user's Grok — some of which delete data, load paid data or run JavaScript in a browser page. The companion therefore also passes `--disallowed-tools search_tool,use_tool` (merged into the existing deny list for `rescue`) in every mode, so Grok cannot reach those servers. With that flag Grok reported only `read_file`, `list_dir` and `grep`.
+**MCP servers are blocked in every mode.** `--tools` only allowlists Grok's *built-in* tools. Measured on 2026-10-18 (grok 1.0.46): with `--tools read_file,grep,list_dir` Grok still listed `search_tool` and `use_tool`, and `search_tool` returned tools of the MCP servers configured in the user's Grok — some of which delete data, load paid data or run JavaScript in a browser page. The companion therefore also passes `--disallowed-tools search_tool,use_tool` (merged into the existing deny list for `rescue`) in every mode, so Grok cannot reach those servers through its MCP gateway tools (measured: with the review flags it then reported only `read_file`, `list_dir` and `grep`). In the modes that keep a shell (`rescue` without `--propose`, with or without `--write`) the shell remains the wider path to whatever the machine can reach. Those two modes also deny Grok's agent-control and media tools (`scheduler_*`, `workflow`, `spawn_subagent`, `kill_command_or_subagent`, `get_command_or_subagent_output`, `image_gen`, `image_edit`, `image_to_video`, `reference_to_video`; all present in a measured tool list, 2026-10-18), so nothing can outlive the run and no paid media call is made.
 
 The review commands are unaffected either way: their allowlist removes the shell entirely, so it holds everywhere, containers included. If you need hard guarantees for rescues, install the enforcer or run them in a disposable environment.
 
@@ -245,7 +245,7 @@ grok exits 0 even when it aborts a run, so the companion reads `stopReason` inst
 
 ## FAQ
 
-**Do I need a separate Grok account?** No. The plugin uses your local Grok CLI sign-in from `grok login` (`~/.grok/auth.json`). `XAI_API_KEY` is not used by the CLI. `/grok:setup` proves the sign-in with one real call (about $0.03).
+**Do I need a separate Grok account?** No. The plugin uses your local Grok CLI sign-in from `grok login` (`~/.grok/auth.json`). In a measurement on 2026-09-27 the CLI authenticated without `XAI_API_KEY` and also with an invalid one, so the variable does not count as a sign-in. `/grok:setup` proves the sign-in with one real call (about $0.03).
 
 **Does it use a separate runtime?** No. It shells out to the same `grok` binary you use directly, with the same config, credentials, and repository checkout.
 

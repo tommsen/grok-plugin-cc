@@ -1,7 +1,7 @@
 ---
 description: Delegate investigation, an explicit fix request, or follow-up rescue work to Grok
 argument-hint: "[--background|--wait] [--resume|--fresh] [--write] [--propose] [--model <model>] [--effort <none|minimal|low|medium|high|xhigh|max>] [what Grok should investigate, solve, or continue]"
-allowed-tools: Bash(node:*), Write, AskUserQuestion
+allowed-tools: Bash(node:*), Bash(git:*), Read, Write, AskUserQuestion
 ---
 
 Hand the user's request to Grok through the companion script. Call it directly

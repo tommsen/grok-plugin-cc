@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Grok can no longer start work that outlives a run.
+
+- Default rescues and `--write` runs also deny `scheduler_*`, `workflow`,
+  `spawn_subagent`, `kill_command_or_subagent`, `get_command_or_subagent_output`
+  and the media tools (`image_gen`, `image_edit`, `image_to_video`,
+  `reference_to_video`); all were present in a measured tool list (grok 1.0.46,
+  2026-10-18).
+- The proposal check is whitespace-strict first and falls back to
+  `--ignore-whitespace` only when needed; the output reports which was used and
+  the apply command it shows matches.
+
 Grok can no longer reach configured MCP servers from the companion.
 
 - `--tools` only allowlists built-in tools: with the review allowlist Grok still
@@ -15,8 +26,9 @@ Grok can implement without writing.
 - New `task --propose` / `/grok:rescue --propose`: Grok runs with the review
   allowlist (no shell, no edit tools) and returns a unified diff. The companion
   stores it, dry-runs `git apply --check`, and applies nothing; Claude reviews,
-  applies and tests. A patch that does not apply fails the run. The check and
-  the apply use `--ignore-whitespace`, so an LF patch fits CRLF files.
+  applies and tests. A patch that does not apply fails the run. The check is
+  whitespace-strict first; only when it fails does the companion retry with
+  `--ignore-whitespace` (an LF patch against CRLF files) and say so.
 - The `grok:delegate` skill uses proposals for implementation tasks by default;
   `--write` stays for when Grok itself should edit files.
 
@@ -35,9 +47,11 @@ Grok is called without a subagent.
   about 200,000 Claude tokens per rescue (measured 2026-09-27); `/grok:rescue`
   now calls the companion directly, with the request in a file.
 - New skill `grok:delegate`: lets Claude hand work to Grok on its own
-  initiative the same way — request as a file, read-only unless the user asks
-  for edits, background via Bash.
-- New `/grok:ask`: a read-only second opinion that Claude weighs and verifies.
+  initiative the same way — request as a file, no edit tools unless the user asks
+  for edits, background via Bash. `--background` runs while the Claude session
+  is open and is cancelled when it ends.
+- New `/grok:ask`: a second opinion without edit tools (Grok keeps its shell,
+  read only by instruction) that Claude weighs and verifies.
 - The plugin-structure tests read CRLF checkouts.
 
 `setup` no longer reports a sign-in it cannot prove.
@@ -53,8 +67,9 @@ Aborted runs no longer pass as empty successes.
 - grok exits 0 when it aborts a run (a failed sign-in returns
   `stopReason: "Cancelled"` with empty text). The companion now treats
   `cancelled`, `error` and `refusal` — compared without case or underscores —
-  and empty answers as failures and exits non-zero. A turn limit is passed
-  through as a visible warning. grok reports the limit as `cancelled` with
+  and empty answers as failures and exits non-zero. In task (streaming) runs a
+  turn limit is passed through as a visible warning; a review that hits the turn
+  limit fails with exit 1. The failure message names the session. grok reports the limit as `cancelled` with
   `num_turns` equal to `--max-turns` (measured), so that combination is the
   warning, not the failure.
 - Plain text printed before the JSON body (device login) is skipped.

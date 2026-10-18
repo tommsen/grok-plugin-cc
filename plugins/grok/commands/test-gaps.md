@@ -19,7 +19,7 @@ Execution mode rules:
 - If the raw arguments include `--background`, run in a Claude background task without asking.
 - Otherwise, estimate the review size the same way as `/grok:review` and use `AskUserQuestion` exactly once with `Wait for results` and `Run in background`, recommended option first with `(Recommended)` suffix. Recommend waiting only for clearly tiny reviews.
 
-Foreground flow:
+Foreground flow (run with `Bash`, passing `timeout: 600000`: 10 minutes, the maximum; the default of 120000 ms would cut Grok off mid-run):
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/grok-companion.mjs" test-gaps "$ARGUMENTS"
 ```

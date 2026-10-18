@@ -25,7 +25,7 @@ Argument handling:
 - Positional text after the flags is the adversarial focus (for example: "challenge whether this caching design survives concurrent writers"). Forward it as-is.
 
 Foreground flow:
-- Run:
+- Run with `Bash`, passing `timeout: 600000` (10 minutes, the maximum; the default of 120000 ms would cut Grok off mid-run):
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/grok-companion.mjs" adversarial-review "$ARGUMENTS"
 ```

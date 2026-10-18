@@ -1,5 +1,5 @@
 ---
-description: Ask Grok for a read-only second opinion on a question about this project and weigh its answer
+description: Ask Grok for a second opinion on a question about this project (no edit tools; Grok keeps its shell, read only by instruction) and weigh its answer
 argument-hint: "<question for Grok>"
 allowed-tools: Read, Glob, Grep, Write, Bash(node:*), Bash(git:*)
 ---

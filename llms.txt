@@ -18,7 +18,7 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 - `/grok:adversarial-review [same flags] [focus text]`: same targeting, skeptical stance — challenges design decisions, trust boundaries, data-loss paths, races.
 - `/grok:test-gaps [same flags as review] [focus text]`: Grok predicts mutations of the change that the tests would let through (`schemas/test-gaps-output.schema.json`); output marked as prediction for Claude to verify.
 - `/grok:rescue [--background|--wait] [--resume|--fresh] [--write] [--propose] [--model <m>] [--effort <e>] <task>`: delegate a task to Grok; Claude calls the companion directly through Bash with the request in a file (no subagent); default is read-leaning (file-edit tools removed, OS read-only sandbox where the platform can enforce it, Grok keeps its shell), `--write` enables edits under Grok's workspace sandbox. `--propose` returns a checked unified diff (review allowlist, nothing applied) for Claude to review and apply.
-- `/grok:ask <question>`: read-only second opinion; Claude weighs and verifies the answer.
+- `/grok:ask <question>`: second opinion without edit tools (Grok keeps its shell; read-only by instruction); Claude weighs and verifies the answer.
 - `/grok:transfer [--source <claude-jsonl>]`: import the current Claude Code transcript into Grok via `grok import`; prints `grok --resume <session-id>` to continue in the Grok TUI.
 - `/grok:status [job-id] [--all]` / `/grok:result [job-id]` / `/grok:cancel [job-id]`: per-workspace background job control.
 - `/grok:setup`: verifies Node, the grok binary, and authentication.
@@ -27,7 +27,7 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 
 - The plugin shells out to the user's own `grok` binary in headless mode (`grok -p` with `--output-format json|streaming-json`, `--json-schema` for reviews); same config, credentials, and usage limits as their direct Grok use.
 - Review enforcement is the tool allowlist, which holds in containers. Grok's OS sandbox needs a kernel enforcer (bubblewrap on Linux, Seatbelt on macOS); grok 1.0.3 refuses to start when it is missing rather than degrading, so the plugin probes: a read-leaning rescue drops `--sandbox` and keeps its tool deny list, and `--write` refuses with the install command. Override with `GROK_COMPANION_SANDBOX=on|off`.
-- `--tools` only allowlists Grok's built-in tools, so every companion mode also passes `--disallowed-tools` with Grok's MCP gateway tools (`search_tool`, `use_tool`); Grok cannot reach the MCP servers configured in the user's grok (measured 2026-10-18, grok 1.0.46).
+- `--tools` only allowlists Grok's built-in tools, so every companion mode also passes `--disallowed-tools` with Grok's MCP gateway tools (`search_tool`, `use_tool`); Grok cannot reach the MCP servers configured in the user's grok through its MCP gateway tools (measured 2026-10-18, grok 1.0.46); in modes with a shell (task-read, task-write) the shell remains the wider path. Those two modes also deny scheduler, workflow, subagent and media tools so nothing outlives a run.
 - Job state lives under Claude's plugin data directory, scoped per workspace; a SessionEnd hook cancels jobs the ending Claude session started.
 - License Apache-2.0; architecture derived from openai/codex-plugin-cc (see NOTICE).
 

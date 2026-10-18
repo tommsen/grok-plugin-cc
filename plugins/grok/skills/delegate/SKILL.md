@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: Use when a second opinion from Grok (xAI) would help - a design or plan to challenge, a stuck diagnosis, a root-cause hunt, test gaps to predict, or a self-contained task to hand off. Calls the Grok companion directly through Bash (no subagent), read-only unless the user asks for edits.
+description: Use when a second opinion from Grok (xAI) would help - a design or plan to challenge, a stuck diagnosis, a root-cause hunt, test gaps to predict, or a self-contained task to hand off. Calls the Grok companion directly through Bash (no subagent); by default no edit tools (Grok keeps its shell, read only by instruction), edits only when the user asks.
 ---
 
 # Delegating to Grok
@@ -69,8 +69,9 @@ only forwards one Bash call cost about 200,000 Claude tokens per run (measured
    - Open-ended, long, or expected to take more than 10 minutes: `Bash` with
      `run_in_background: true` and the same command. You are notified when
      Grok finishes; keep working meanwhile.
-   - Must outlive this Claude session: add `--background` to the companion
-     call; collect it later with `/grok:status` and `/grok:result`.
+   - Detached from this call: add `--background` to the companion call. It
+     keeps running while this Claude session is open and is cancelled when the
+     session ends; collect it with `/grok:status` and `/grok:result`.
 4. A non-zero exit means Grok failed, even if some text came back. A
    `Cancelled` run usually means the sign-in is broken: tell the user to run
    `/grok:setup`; never run `grok login` yourself.
