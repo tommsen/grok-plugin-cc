@@ -239,6 +239,16 @@ test("test-gaps runs a review with its own schema and prompt", () => {
   const call = [...fake.readCalls()].reverse().find((c) => c.includes("--json-schema"));
   assert.match(call[call.indexOf("--json-schema") + 1], /surviving_tests/);
   assert.match(call[call.indexOf("-p") + 1], /stay green/i);
+
+  // Without --json the dedicated renderer must run; a dropped `render:` wiring
+  // would fall back to the generic review output and lose the prediction notice.
+  const text = runCompanion(["test-gaps"], {
+    cwd: repoDir,
+    env: { ...baseEnv, FAKE_GROK_JSON_OUTPUT: JSON.stringify({ text: JSON.stringify(gaps), structuredOutput: gaps, stopReason: "end_turn", sessionId: "s-gaps-text" }) }
+  });
+  assert.equal(text.status, 0, `stderr: ${text.stderr}`);
+  assert.match(text.stdout, /Vorhersage, nicht gemessen/);
+  assert.match(text.stdout, /Drop the log call/);
 });
 
 test("a cancelled grok run makes the companion exit non-zero", () => {

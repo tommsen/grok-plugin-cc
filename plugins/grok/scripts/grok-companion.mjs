@@ -57,7 +57,7 @@ function printUsage() {
       "  node scripts/grok-companion.mjs review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs adversarial-review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs test-gaps [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
-      "  node scripts/grok-companion.mjs task[--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
+      "  node scripts/grok-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
       "  node scripts/grok-companion.mjs transfer [--source <claude-jsonl>] [--json]",
       "  node scripts/grok-companion.mjs status [job-id] [--all] [--json]",
       "  node scripts/grok-companion.mjs result [job-id] [--json]",

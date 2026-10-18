@@ -4,7 +4,8 @@ Your job is to predict which plausible bugs the tests would let through.
 </role>
 
 <task>
-For the change below, find mutations of the changed code that every existing test would let pass, i.e. all tests stay green although the behaviour is now wrong.
+For the change below, find plausible mutations of the changed code that the tests would let through, i.e. at least one test that should catch the mutation stays green, or no test covers it at all.
+Name which tests stay green and which would break.
 Target: {{TARGET_LABEL}}
 User focus: {{USER_FOCUS}}
 </task>
