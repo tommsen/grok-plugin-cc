@@ -7,7 +7,7 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 ## Install (inside Claude Code)
 
 ```
-/plugin marketplace add thevibeworks/grok-plugin-cc
+/plugin marketplace add tommsen/grok-plugin-cc
 /plugin install grok@grok-cc
 /grok:setup
 ```
@@ -27,7 +27,7 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 
 - The plugin shells out to the user's own `grok` binary in headless mode (`grok -p` with `--output-format json|streaming-json`, `--json-schema` for reviews); same config, credentials, and usage limits as their direct Grok use.
 - Review enforcement is the tool allowlist, which holds in containers. Grok's OS sandbox needs a kernel enforcer (bubblewrap on Linux, Seatbelt on macOS); grok 1.0.3 refuses to start when it is missing rather than degrading, so the plugin probes: a read-leaning rescue drops `--sandbox` and keeps its tool deny list, and `--write` refuses with the install command. Override with `GROK_COMPANION_SANDBOX=on|off`.
-- `--tools` only allowlists Grok's built-in tools, so every companion mode also passes `--disallowed-tools` with Grok's MCP gateway tools (`search_tool`, `use_tool`); Grok cannot reach the MCP servers configured in the user's grok through its MCP gateway tools (measured 2026-10-18, grok 1.0.46); in modes with a shell (task-read, task-write) the shell remains the wider path. Those two modes also deny scheduler, workflow, subagent and media tools so nothing outlives a run.
+- `--tools` only allowlists Grok's built-in tools, so every companion mode also passes `--disallowed-tools` with Grok's MCP gateway tools (`search_tool`, `use_tool`); Grok cannot reach the MCP servers configured in the user's grok through its MCP gateway tools (measured 2026-10-18, grok 1.0.46); in modes with a shell (task-read, task-write) the shell remains the wider path. Those two modes also deny Grok's scheduler, workflow, subagent and media tools; the shell stays available there.
 - Job state lives under Claude's plugin data directory, scoped per workspace; a SessionEnd hook cancels jobs the ending Claude session started.
 - License Apache-2.0; architecture derived from openai/codex-plugin-cc (see NOTICE).
 

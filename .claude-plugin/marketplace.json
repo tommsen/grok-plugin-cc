@@ -5,13 +5,13 @@
   },
   "metadata": {
     "description": "Grok plugins to use in Claude Code for delegation and code review.",
-    "version": "0.1.1"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "grok",
       "description": "Use xAI's Grok CLI from Claude Code for code reviews and task delegation.",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "author": {
         "name": "thevibeworks"
       },

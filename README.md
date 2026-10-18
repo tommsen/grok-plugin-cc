@@ -18,6 +18,8 @@
 This is the Grok counterpart to OpenAI's [codex-plugin-cc](https://github.com/openai/codex-plugin-cc): same workflow, same command shapes, driven by the Grok CLI's headless mode instead of the Codex app server.
 
 > Unofficial community plugin by [thevibeworks](https://github.com/thevibeworks). Not affiliated with xAI or Anthropic.
+>
+> This is the personal fork [tommsen/grok-plugin-cc](https://github.com/tommsen/grok-plugin-cc) (from 0.2.0): Windows fixes, honest failure and sign-in reporting, no forwarding subagent, proposal mode, `/grok:ask`, `/grok:test-gaps`, and tighter tool limits. See [CHANGELOG.md](CHANGELOG.md).
 
 ## What You Get
 
@@ -38,7 +40,7 @@ Requirements: **Node.js 18.18+** and the **Grok CLI** signed in with an xAI acco
 Add the marketplace and install in Claude Code:
 
 ```bash
-/plugin marketplace add thevibeworks/grok-plugin-cc
+/plugin marketplace add tommsen/grok-plugin-cc
 /plugin install grok@grok-cc
 ```
 
@@ -241,7 +243,7 @@ Model and effort defaults come from your own Grok config (`~/.grok/config.toml`)
 
 Prompts longer than 8000 characters — in practice every review of a sizeable diff — are handed over with `--prompt-file` instead of `-p`, through a private temp file that is removed when Grok exits. Windows caps the whole command line at 32767 characters and Linux caps a single argument at 128 KiB; passing the diff inline failed with `spawn ENAMETOOLONG` / `E2BIG` before Grok ever ran. Short prompts still use `-p`.
 
-grok exits 0 even when it aborts a run, so the companion reads `stopReason` instead of trusting the exit code: `Cancelled`, `error` and `refusal` (compared without case or underscores) and empty answers count as failures and make the companion exit non-zero. Hitting the turn limit is reported as a warning above the answer. grok has no stop reason of its own for the limit: in streaming mode it ends with `cancelled` and `num_turns` equal to `--max-turns`, which the companion recognises.
+grok exits 0 even when it aborts a run, so the companion reads `stopReason` instead of trusting the exit code: `Cancelled`, `error` and `refusal` (compared without case or underscores) and empty answers count as failures and make the companion exit non-zero. In task runs, hitting the turn limit is reported as a warning above the answer; reviews at the limit fail with exit 1. grok has no stop reason of its own for the limit: in streaming mode it ends with `cancelled` and `num_turns` equal to `--max-turns`, which the companion recognises.
 
 ## FAQ
 

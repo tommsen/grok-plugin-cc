@@ -1,6 +1,6 @@
 {
   "name": "grok",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Use xAI's Grok CLI from Claude Code for code reviews and task delegation.",
   "author": {
     "name": "thevibeworks"

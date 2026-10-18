@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - 2026-10-18
 
-Grok can no longer start work that outlives a run.
+Grok's scheduler, workflow, subagent and media tools are blocked.
 
 - Default rescues and `--write` runs also deny `scheduler_*`, `workflow`,
   `spawn_subagent` and the media tools (`image_gen`, `image_edit`,
