@@ -126,7 +126,6 @@ test("renderSetupReport separates login file, API key and live probe", () => {
   assert.match(unverified, /Login file: present/);
   assert.match(unverified, /XAI_API_KEY: set \(not used by the grok CLI/);
   assert.match(unverified, /Live probe: not run/);
-  assert.doesNotMatch(unverified, /xai-/, "the key value must never be printed");
 
   const failed = renderSetupReport({
     ready: false,
@@ -138,6 +137,19 @@ test("renderSetupReport separates login file, API key and live probe", () => {
     nextSteps: []
   });
   assert.match(failed, /Live probe: FAILED/);
+
+  // A failed probe without an error text must not print "null".
+  const noError = renderSetupReport({
+    ready: false,
+    verified: false,
+    node: { available: true, version: "v22" },
+    grok: { available: true, version: "grok 1.0.46" },
+    auth: { loggedIn: true, method: "oauth", authFile: "/h/.grok/auth.json", apiKeySet: false },
+    probe: { ok: false, stopReason: null, costUsd: null, error: null },
+    nextSteps: []
+  });
+  assert.match(noError, /Live probe: FAILED — no answer/);
+  assert.doesNotMatch(noError, /null/);
 
   const ok = renderSetupReport({
     ready: true,

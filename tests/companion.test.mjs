@@ -41,6 +41,13 @@ test("setup does not count XAI_API_KEY as a sign-in", () => {
   assert.equal(report.auth.loggedIn, false);
   assert.equal(report.ready, false);
   assert.equal(report.verified, null);
+
+  // Leak guard: neither the JSON report nor the human-readable output may
+  // contain the key value, only the fact that a key is set.
+  assert.ok(!JSON.stringify(report).includes("xai-test-key"), "JSON report leaked the key value");
+  const human = runCompanion(["setup"], { cwd: repoDir, env: baseEnv });
+  assert.equal(human.status, 0, `stderr: ${human.stderr}`);
+  assert.ok(!human.stdout.includes("xai-test-key"), "rendered output leaked the key value");
 });
 
 test("setup with a login file is ready but unverified until probed", () => {

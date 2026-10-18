@@ -30,7 +30,7 @@ This is the Grok counterpart to OpenAI's [codex-plugin-cc](https://github.com/op
 
 ## Install
 
-Requirements: **Node.js 18.18+** and the **Grok CLI** signed in with an xAI account (or an `XAI_API_KEY` from [console.x.ai](https://console.x.ai)). Usage contributes to your Grok usage limits.
+Requirements: **Node.js 18.18+** and the **Grok CLI** signed in with an xAI account via `grok login`. Usage contributes to your Grok usage limits.
 
 Add the marketplace and install in Claude Code:
 
@@ -191,7 +191,7 @@ The review commands are unaffected either way: their allowlist removes the shell
 
 ## When to use · When to skip
 
-Use it when you already work in Claude Code, have Grok (subscription or `XAI_API_KEY`), and want a second model's review or a place to hand off tasks without leaving your session.
+Use it when you already work in Claude Code, have a Grok sign-in (`grok login`), and want a second model's review or a place to hand off tasks without leaving your session.
 
 Skip it if:
 

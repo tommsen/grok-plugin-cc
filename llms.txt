@@ -2,7 +2,7 @@
 
 > Claude Code plugin that runs xAI's Grok CLI from inside Claude Code: structured read-only code reviews, task delegation with resumable sessions, Claude-to-Grok session transfer, and background job control. 8 slash commands, 1 subagent, zero runtime dependencies, Node 18.18+, Apache-2.0. Unofficial community plugin by thevibeworks; the Grok counterpart to openai/codex-plugin-cc.
 
-Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin/marketplace.json`, marketplace name `grok-cc`, plugin name `grok`). Not an npm package. Requires the user's own Grok CLI (`grok`) binary, installed via `curl -fsSL https://x.ai/cli/install.sh | bash` or `npm install -g @xai-official/grok`, authenticated by `grok login` or an `XAI_API_KEY` environment variable from console.x.ai.
+Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin/marketplace.json`, marketplace name `grok-cc`, plugin name `grok`). Not an npm package. Requires the user's own Grok CLI (`grok`) binary, installed via `curl -fsSL https://x.ai/cli/install.sh | bash` or `npm install -g @xai-official/grok`, authenticated by `grok login` (credentials in `~/.grok/auth.json`).
 
 ## Install (inside Claude Code)
 

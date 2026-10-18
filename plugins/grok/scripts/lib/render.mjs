@@ -32,7 +32,7 @@ export function renderSetupReport(report) {
   }
   if (report.probe) {
     const cost = report.probe.costUsd != null ? ` (cost $${report.probe.costUsd.toFixed(4)})` : "";
-    lines.push(report.probe.ok ? `- Live probe: OK${cost}` : `- Live probe: FAILED — ${report.probe.error}`);
+    lines.push(report.probe.ok ? `- Live probe: OK${cost}` : `- Live probe: FAILED — ${report.probe.error ?? "no answer (non-zero exit status)"}`);
   } else {
     lines.push("- Live probe: not run — sign-in not verified");
   }
