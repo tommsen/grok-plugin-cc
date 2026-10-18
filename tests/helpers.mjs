@@ -19,6 +19,13 @@ if (process.env.FAKE_GROK_CALLS_FILE) {
   fs.appendFileSync(process.env.FAKE_GROK_CALLS_FILE, JSON.stringify(argv) + "\\n");
 }
 
+// The companion deletes its prompt file once grok exits, so the fake keeps a
+// copy for tests that need to see what was handed over.
+const promptFileIndex = argv.indexOf("--prompt-file");
+if (promptFileIndex !== -1 && process.env.FAKE_GROK_PROMPT_COPY) {
+  fs.copyFileSync(argv[promptFileIndex + 1], process.env.FAKE_GROK_PROMPT_COPY);
+}
+
 const exitCode = Number(process.env.FAKE_GROK_EXIT_CODE || "0");
 
 if (argv.includes("--version") || argv[0] === "version") {

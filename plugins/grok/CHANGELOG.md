@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Fixed reviews of large diffs failing before Grok started.
+
+- `/grok:review` and `/grok:adversarial-review` passed the whole prompt,
+  diff included, as the `-p` argument. Windows caps the command line at 32767
+  characters, so any diff past ~32 KB died with `spawn ENAMETOOLONG`; Linux
+  hits `E2BIG` past 128 KiB per argument.
+- Prompts longer than 8000 characters now go through `--prompt-file` (a
+  private temp file, removed when Grok exits, also on spawn failure). Shorter
+  prompts keep `-p`. Applies to tasks too, since they share the runner.
+- Checked against grok 1.0.46: `--prompt-file` keeps UTF-8 intact and works
+  with `--resume`; grok rejects `-p` and `--prompt-file` together, so only
+  one is ever sent.
+
 ## 0.1.1 - 2026-08-25
 
 Fixed a start-up failure on Linux machines without a sandbox enforcer.

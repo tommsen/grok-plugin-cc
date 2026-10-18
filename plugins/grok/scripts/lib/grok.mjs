@@ -20,6 +20,34 @@ export const TASK_READ_DISALLOWED_TOOLS = "search_replace,write";
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_MAX_TURNS = 50;
 
+// Prompts longer than this go to grok through `--prompt-file` instead of `-p`.
+// Windows caps the whole command line at 32767 UTF-16 units, and a review
+// prompt carries the full diff, so anything past ~32 KB died in spawn() with
+// ENAMETOOLONG before grok ever ran. The cap counts after quoting, which can
+// double backslashes and quotes, and the JSON schema and flags need room too
+// -- hence a margin far below the hard limit. Linux has its own per-argument
+// cap (128 KiB), so the file route is used on every platform. Short prompts
+// keep `-p`, so nothing changes for them.
+export const PROMPT_ARG_MAX_CHARS = 8000;
+
+export function shouldUsePromptFile(prompt) {
+  return String(prompt ?? "").length > PROMPT_ARG_MAX_CHARS;
+}
+
+// Writes the prompt to a private temp directory and returns its path plus a
+// cleanup function. UTF-8, no BOM: grok reads the file verbatim.
+export function writePromptFile(prompt) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "grok-companion-prompt-"));
+  const file = path.join(dir, "prompt.md");
+  fs.writeFileSync(file, String(prompt ?? ""), { encoding: "utf8", mode: 0o600 });
+  return {
+    file,
+    cleanup() {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  };
+}
+
 // grok enforces `--sandbox` with a per-platform kernel mechanism, and on Linux
 // that mechanism is bubblewrap. When `bwrap` is missing grok does not warn and
 // continue -- it refuses to start:
@@ -110,7 +138,12 @@ export function buildHeadlessArgs(options = {}) {
   if (resuming) {
     args.push("--resume", String(options.resumeSessionId));
   }
-  args.push("-p", String(options.prompt ?? ""));
+  // grok rejects `-p` together with `--prompt-file`, so exactly one is passed.
+  if (options.promptFile) {
+    args.push("--prompt-file", String(options.promptFile));
+  } else {
+    args.push("-p", String(options.prompt ?? ""));
+  }
   args.push("--no-auto-update");
 
   if (options.model) {
@@ -220,16 +253,38 @@ function applyStreamEvent(result, event, onProgress) {
 }
 
 export function runGrokHeadless(cwd, options = {}) {
-  const args = buildHeadlessArgs(options);
+  const promptFile = shouldUsePromptFile(options.prompt) ? writePromptFile(options.prompt) : null;
+  let args;
+  try {
+    args = buildHeadlessArgs({ ...options, promptFile: promptFile?.file });
+  } catch (error) {
+    promptFile?.cleanup();
+    throw error;
+  }
   const streaming = !options.jsonSchema;
 
-  return new Promise((resolve) => {
-    const child = spawn(GROK_BIN, args, {
-      cwd,
-      env: buildBaseEnv(options.env),
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true
-    });
+  return new Promise((rawResolve) => {
+    // Every exit path goes through here, so the prompt file never outlives
+    // the run. `error` and `close` can both fire; cleanup is idempotent.
+    const resolve = (value) => {
+      promptFile?.cleanup();
+      rawResolve(value);
+    };
+    // spawn() throws synchronously for some failures (ENAMETOOLONG among
+    // them) instead of emitting `error`; catch it so the prompt file is
+    // still removed, then rethrow -- the promise rejects as it did before.
+    let child;
+    try {
+      child = spawn(GROK_BIN, args, {
+        cwd,
+        env: buildBaseEnv(options.env),
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true
+      });
+    } catch (error) {
+      promptFile?.cleanup();
+      throw error;
+    }
 
     let stdout = "";
     let stderr = "";
