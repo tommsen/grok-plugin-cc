@@ -25,11 +25,17 @@ export function renderSetupReport(report) {
   lines.push(
     `- Grok CLI: ${report.grok.available ? report.grok.version ?? "available" : "not found on PATH"}`
   );
-  lines.push(
-    `- Authentication: ${
-      report.auth.loggedIn ? `ready (${report.auth.method})` : "not signed in"
-    }`
-  );
+  lines.push(`- Login file: ${report.auth.loggedIn ? `present (${report.auth.authFile})` : "missing"}`);
+  if (report.auth.apiKeySet) {
+    // Existence only -- the value never leaves the environment.
+    lines.push("- XAI_API_KEY: set (not used by the grok CLI per measurement on 2026-09-27; not counted as sign-in)");
+  }
+  if (report.probe) {
+    const cost = report.probe.costUsd != null ? ` (cost $${report.probe.costUsd.toFixed(4)})` : "";
+    lines.push(report.probe.ok ? `- Live probe: OK${cost}` : `- Live probe: FAILED — ${report.probe.error}`);
+  } else {
+    lines.push("- Live probe: not run — sign-in not verified");
+  }
   lines.push(`- Ready: ${report.ready ? "yes" : "no"}`);
 
   if (report.actionsTaken?.length) {

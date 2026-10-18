@@ -12,6 +12,7 @@ import {
   getGrokAuthStatus,
   getGrokAvailability,
   importClaudeSession,
+  probeGrokAuth,
   runGrokHeadless
 } from "./lib/grok.mjs";
 import {
@@ -52,7 +53,7 @@ function printUsage() {
   console.log(
     [
       "Usage:",
-      "  node scripts/grok-companion.mjs setup [--json]",
+      "  node scripts/grok-companion.mjs setup [--probe] [--json]",
       "  node scripts/grok-companion.mjs review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs adversarial-review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
@@ -146,25 +147,32 @@ function parseStructuredOutput(result) {
 
 // --- setup ---------------------------------------------------------------
 
-async function buildSetupReport(cwd) {
+async function buildSetupReport(cwd, { probe = false } = {}) {
   const nodeStatus = binaryAvailable("node", ["--version"], { cwd });
   const grokStatus = getGrokAvailability(cwd);
   const authStatus = getGrokAuthStatus();
+  // Only the probe proves grok can answer; the login file is a precondition.
+  const probeResult = probe && grokStatus.available ? await probeGrokAuth(cwd) : null;
+  const signedIn = probeResult ? probeResult.ok : authStatus.loggedIn;
 
   const nextSteps = [];
   if (!grokStatus.available) {
     nextSteps.push("Install the Grok CLI: `curl -fsSL https://x.ai/cli/install.sh | bash` or `npm install -g @xai-official/grok`.");
   }
-  if (grokStatus.available && !authStatus.loggedIn) {
+  if (grokStatus.available && !signedIn) {
     nextSteps.push("Sign in with `!grok login` (or `!grok login --device-auth` on machines without a browser).");
-    nextSteps.push("Alternatively export an API key from console.x.ai as `XAI_API_KEY`.");
+  }
+  if (grokStatus.available && !probeResult) {
+    nextSteps.push("Run `setup --probe` for a live check (one paid call, about $0.03); until then the sign-in is not verified.");
   }
 
   return {
-    ready: nodeStatus.available && grokStatus.available && authStatus.loggedIn,
+    ready: nodeStatus.available && grokStatus.available && signedIn,
+    verified: probeResult ? probeResult.ok : null,
     node: nodeStatus,
     grok: grokStatus,
     auth: authStatus,
+    probe: probeResult,
     nextSteps
   };
 }
@@ -172,9 +180,9 @@ async function buildSetupReport(cwd) {
 async function handleSetup(argv) {
   const { options } = parseCommandInput(argv, {
     valueOptions: ["cwd"],
-    booleanOptions: ["json"]
+    booleanOptions: ["json", "probe"]
   });
-  const report = await buildSetupReport(resolveCommandCwd(options));
+  const report = await buildSetupReport(resolveCommandCwd(options), { probe: Boolean(options.probe) });
   outputResult(options.json ? report : renderSetupReport(report), options.json);
 }
 

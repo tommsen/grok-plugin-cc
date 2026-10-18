@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+`setup` no longer reports a sign-in it cannot prove.
+
+- The grok CLI authenticates from `~/.grok/auth.json`; `XAI_API_KEY` is shown
+  as set but no longer counts as a sign-in (the CLI ignored it in a measurement
+  on 2026-09-27).
+- `setup --probe` makes one real call (about $0.03) and reports its cost; only
+  that verifies the sign-in. `/grok:setup` runs with the probe.
+
 Aborted runs no longer pass as empty successes.
 
 - grok exits 0 when it aborts a run (a failed sign-in returns

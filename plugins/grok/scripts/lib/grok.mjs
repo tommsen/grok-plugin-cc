@@ -145,21 +145,23 @@ export function resolveGrokHome() {
   return process.env.GROK_HOME || path.join(os.homedir(), ".grok");
 }
 
+// The grok CLI authenticates from ~/.grok/auth.json (`grok login`). Measured on
+// 2026-09-27: it ran without XAI_API_KEY and also with a deliberately invalid
+// key, so the variable is reported but never counted as a sign-in. Whether a
+// key alone works without auth.json is not measured -- only a live probe
+// (probeGrokAuth) settles whether grok can actually answer.
 export function getGrokAuthStatus() {
-  if (process.env.XAI_API_KEY) {
-    return { loggedIn: true, method: "api-key" };
-  }
-
+  const apiKeySet = Boolean(process.env.XAI_API_KEY);
   const authFile = path.join(resolveGrokHome(), "auth.json");
   try {
     const stat = fs.statSync(authFile);
     if (stat.isFile() && stat.size > 2) {
-      return { loggedIn: true, method: "oauth", authFile };
+      return { loggedIn: true, method: "oauth", authFile, apiKeySet };
     }
   } catch {
     // No cached credentials.
   }
-  return { loggedIn: false, method: null, authFile };
+  return { loggedIn: false, method: null, authFile, apiKeySet };
 }
 
 function buildBaseEnv(extraEnv = {}) {
@@ -473,6 +475,31 @@ export function runGrokHeadless(cwd, options = {}) {
       });
     });
   });
+}
+
+// A real, cheap round trip (~$0.03, measured 2026-10-18). A schema forces the
+// JSON output format, which is the one that reports total_cost_usd.
+const AUTH_PROBE_PROMPT = 'Reply with the JSON object {"answer":"OK"} and nothing else.';
+const AUTH_PROBE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["answer"],
+  properties: { answer: { type: "string" } }
+};
+
+export async function probeGrokAuth(cwd) {
+  const result = await runGrokHeadless(cwd, {
+    prompt: AUTH_PROBE_PROMPT,
+    mode: "review",
+    jsonSchema: AUTH_PROBE_SCHEMA,
+    maxTurns: 2
+  });
+  return {
+    ok: result.status === 0 && !result.error,
+    stopReason: result.stopReason,
+    costUsd: result.costUsd,
+    error: result.error?.message ?? null
+  };
 }
 
 export function importClaudeSession(cwd, transcriptPath) {

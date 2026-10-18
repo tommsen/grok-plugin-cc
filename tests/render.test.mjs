@@ -113,6 +113,44 @@ test("renderSetupReport lists next steps when not ready", () => {
   assert.match(rendered, /Install the Grok CLI/);
 });
 
+test("renderSetupReport separates login file, API key and live probe", () => {
+  const unverified = renderSetupReport({
+    ready: true,
+    verified: null,
+    node: { available: true, version: "v22" },
+    grok: { available: true, version: "grok 1.0.46" },
+    auth: { loggedIn: true, method: "oauth", authFile: "/h/.grok/auth.json", apiKeySet: true },
+    probe: null,
+    nextSteps: []
+  });
+  assert.match(unverified, /Login file: present/);
+  assert.match(unverified, /XAI_API_KEY: set \(not used by the grok CLI/);
+  assert.match(unverified, /Live probe: not run/);
+  assert.doesNotMatch(unverified, /xai-/, "the key value must never be printed");
+
+  const failed = renderSetupReport({
+    ready: false,
+    verified: false,
+    node: { available: true, version: "v22" },
+    grok: { available: true, version: "grok 1.0.46" },
+    auth: { loggedIn: true, method: "oauth", authFile: "/h/.grok/auth.json", apiKeySet: false },
+    probe: { ok: false, stopReason: "Cancelled", costUsd: null, error: "grok stopped the run (stopReason: Cancelled)." },
+    nextSteps: []
+  });
+  assert.match(failed, /Live probe: FAILED/);
+
+  const ok = renderSetupReport({
+    ready: true,
+    verified: true,
+    node: { available: true, version: "v22" },
+    grok: { available: true, version: "grok 1.0.46" },
+    auth: { loggedIn: true, method: "oauth", authFile: "/h/.grok/auth.json", apiKeySet: false },
+    probe: { ok: true, stopReason: "end_turn", costUsd: 0.0312, error: null },
+    nextSteps: []
+  });
+  assert.match(ok, /Live probe: OK \(cost \$0\.0312\)/);
+});
+
 test("renderTransferResult prints the resume command", () => {
   const rendered = renderTransferResult({
     grokSessionId: "abc",

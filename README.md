@@ -211,7 +211,7 @@ grok exits 0 even when it aborts a run, so the companion reads `stopReason` inst
 
 ## FAQ
 
-**Do I need a separate Grok account?** No. The plugin uses your local Grok CLI authentication — browser login or `XAI_API_KEY`.
+**Do I need a separate Grok account?** No. The plugin uses your local Grok CLI sign-in from `grok login` (`~/.grok/auth.json`). `XAI_API_KEY` is not used by the CLI. `/grok:setup` proves the sign-in with one real call (about $0.03).
 
 **Does it use a separate runtime?** No. It shells out to the same `grok` binary you use directly, with the same config, credentials, and repository checkout.
 

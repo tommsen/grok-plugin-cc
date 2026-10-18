@@ -17,6 +17,7 @@ before(() => {
   baseEnv = {
     ...fake.env,
     CLAUDE_PLUGIN_DATA: path.join(tempDir, "plugin-data"),
+    GROK_HOME: path.join(tempDir, "grok-home"),
     XAI_API_KEY: "xai-test-key"
   };
 });
@@ -31,11 +32,42 @@ function runJson(args, env = {}) {
   return JSON.parse(result.stdout);
 }
 
-test("setup reports ready with fake grok and API key", () => {
+// Measured 2026-09-27: the grok CLI ignores XAI_API_KEY and authenticates from
+// ~/.grok/auth.json. A set key alone must therefore not make setup ready.
+test("setup does not count XAI_API_KEY as a sign-in", () => {
   const report = runJson(["setup"]);
-  assert.equal(report.ready, true);
   assert.equal(report.grok.available, true);
-  assert.equal(report.auth.method, "api-key");
+  assert.equal(report.auth.apiKeySet, true);
+  assert.equal(report.auth.loggedIn, false);
+  assert.equal(report.ready, false);
+  assert.equal(report.verified, null);
+});
+
+test("setup with a login file is ready but unverified until probed", () => {
+  const grokHome = path.join(tempDir, "grok-home");
+  fs.mkdirSync(grokHome, { recursive: true });
+  fs.writeFileSync(path.join(grokHome, "auth.json"), JSON.stringify({ token: "fake" }));
+  const report = runJson(["setup"]);
+  assert.equal(report.auth.loggedIn, true);
+  assert.equal(report.ready, true);
+  assert.equal(report.verified, null);
+  assert.match(report.nextSteps.join(" "), /--probe/);
+});
+
+test("setup --probe verifies the sign-in with a live call", () => {
+  const report = runJson(["setup", "--probe"]);
+  assert.equal(report.verified, true);
+  assert.equal(report.probe.ok, true);
+  assert.equal(report.ready, true);
+});
+
+test("setup --probe reports a cancelled probe as not ready", () => {
+  const report = runJson(["setup", "--probe"], {
+    FAKE_GROK_JSON_OUTPUT: JSON.stringify({ text: "", stopReason: "Cancelled", sessionId: "s" })
+  });
+  assert.equal(report.verified, false);
+  assert.equal(report.ready, false);
+  assert.match(report.probe.error, /Cancelled/);
 });
 
 test("review runs against a dirty working tree and stores a job", () => {
@@ -46,7 +78,8 @@ test("review runs against a dirty working tree and stores a job", () => {
   assert.equal(payload.result.verdict, "approve");
   assert.equal(payload.grokSessionId, "fake-session-json");
 
-  const reviewCall = fake.readCalls().find((call) => call.includes("--json-schema"));
+  // The newest schema call: the earlier setup --probe tests also use --json-schema.
+  const reviewCall = [...fake.readCalls()].reverse().find((call) => call.includes("--json-schema"));
   assert.ok(reviewCall, "grok should be invoked with --json-schema");
   assert.ok(reviewCall.includes("--tools"), "review must pass the read-only tool allowlist");
   const promptIndex = reviewCall.indexOf("-p");
