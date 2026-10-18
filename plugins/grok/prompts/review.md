@@ -8,6 +8,11 @@ Target: {{TARGET_LABEL}}
 User focus: {{USER_FOCUS}}
 </task>
 
+<project_rules>
+Before reviewing, read CLAUDE.md and AGENTS.md at the repository root if they exist.
+Treat their rules as binding review criteria. A finding that rests on such a rule must name the rule.
+</project_rules>
+
 <review_method>
 Read the change as the next maintainer would. Prioritize:
 - correctness bugs: broken logic, wrong edge cases, off-by-one, bad error handling

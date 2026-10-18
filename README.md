@@ -4,7 +4,7 @@
 
 **Use xAI's [Grok CLI](https://x.ai/cli) from inside Claude Code — code reviews, task delegation, session handoff.**
 
-9 commands · 1 skill · 0 runtime dependencies · Node 18.18+ · Apache-2.0
+10 commands · 1 skill · 0 runtime dependencies · Node 18.18+ · Apache-2.0
 
 [![CI](https://github.com/thevibeworks/grok-plugin-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/thevibeworks/grok-plugin-cc/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -23,6 +23,7 @@ This is the Grok counterpart to OpenAI's [codex-plugin-cc](https://github.com/op
 
 - `/grok:review` — read-only Grok code review of your working tree or branch, returned as structured findings (severity, file:line, confidence, recommendation)
 - `/grok:adversarial-review` — a steerable challenge review that attacks the design, not just the code
+- `/grok:test-gaps` — predicts which mutations of your change the tests would let through, for Claude to verify by running them
 - `/grok:rescue` — delegate investigation or fixes to Grok, foreground or background, resumable across calls; called directly through Bash, no subagent
 - `/grok:ask` — a read-only second opinion on a question; Claude weighs and verifies the answer
 - Skill `grok:delegate` — lets Claude hand work to Grok on its own initiative the same cheap way (request as a file, read-only unless asked)
@@ -112,6 +113,8 @@ Runs a Grok code review on your current work.
 
 The review is read-only by construction: Grok runs with a tool allowlist of `read_file`, `grep`, and `list_dir` — no shell, no write tools, no subagents. Findings come back as structured JSON validated against a schema and are rendered verbatim.
 
+All review prompts tell Grok to read `CLAUDE.md` and `AGENTS.md` at the repository root first and to treat their rules as review criteria.
+
 ### `/grok:adversarial-review`
 
 Same targeting as `/grok:review`, but the prompt instructs Grok to break confidence in the change: attack trust boundaries, data-loss paths, race conditions, rollback safety, and hidden assumptions.
@@ -121,6 +124,17 @@ Same targeting as `/grok:review`, but the prompt instructs Grok to break confide
 /grok:adversarial-review --base main challenge whether this caching design survives concurrent writers
 /grok:adversarial-review --background look for race conditions
 ```
+
+### `/grok:test-gaps`
+
+Grok as an adversary to your tests: it predicts which plausible mutations of the changed code every existing test would let through, names the tests that stay green and the ones that would break, and suggests a test per gap. Same targeting and flags as `/grok:review`.
+
+```bash
+/grok:test-gaps
+/grok:test-gaps --base main focus on the cleanup paths
+```
+
+Every gap is marked "Vorhersage, nicht gemessen" (prediction, not measured). In a double-blind comparison on 2026-09-27 Grok found four test gaps Claude missed, but ran no mutation itself — so Claude offers to run the top predictions before any of them counts as a finding.
 
 ### `/grok:rescue`
 

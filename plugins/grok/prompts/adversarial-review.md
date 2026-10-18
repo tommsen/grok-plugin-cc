@@ -9,6 +9,11 @@ Target: {{TARGET_LABEL}}
 User focus: {{USER_FOCUS}}
 </task>
 
+<project_rules>
+Before reviewing, read CLAUDE.md and AGENTS.md at the repository root if they exist.
+Treat their rules as binding review criteria. A finding that rests on such a rule must name the rule.
+</project_rules>
+
 <operating_stance>
 Default to skepticism.
 Assume the change can fail in subtle, high-cost, or user-visible ways until the evidence says otherwise.

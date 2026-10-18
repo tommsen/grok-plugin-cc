@@ -14,6 +14,7 @@ const EXPECTED_COMMANDS = [
   "review",
   "setup",
   "status",
+  "test-gaps",
   "transfer"
 ];
 
@@ -79,12 +80,35 @@ test("review schema is valid JSON with the expected contract", () => {
 });
 
 test("prompt templates carry the placeholders the companion interpolates", () => {
-  for (const name of ["review", "adversarial-review"]) {
+  for (const name of ["review", "adversarial-review", "test-gaps"]) {
     const template = fs.readFileSync(path.join(PLUGIN_ROOT, "prompts", `${name}.md`), "utf8");
     for (const placeholder of ["{{TARGET_LABEL}}", "{{USER_FOCUS}}", "{{REVIEW_COLLECTION_GUIDANCE}}", "{{REVIEW_INPUT}}"]) {
       assert.ok(template.includes(placeholder), `${name}.md missing ${placeholder}`);
     }
   }
+});
+
+test("every review prompt tells grok to apply the project's own rules", () => {
+  for (const name of ["review", "adversarial-review", "test-gaps"]) {
+    const template = fs.readFileSync(path.join(PLUGIN_ROOT, "prompts", `${name}.md`), "utf8");
+    assert.match(template, /<project_rules>[\s\S]*CLAUDE\.md[\s\S]*AGENTS\.md[\s\S]*<\/project_rules>/, `${name}.md needs a project_rules block`);
+  }
+});
+
+test("test-gaps schema asks for surviving and breaking tests per gap", () => {
+  const schema = JSON.parse(
+    fs.readFileSync(path.join(PLUGIN_ROOT, "schemas", "test-gaps-output.schema.json"), "utf8")
+  );
+  assert.deepEqual(schema.required, ["summary", "gaps"]);
+  assert.deepEqual(schema.properties.gaps.items.required, [
+    "mutation",
+    "file",
+    "line",
+    "surviving_tests",
+    "breaking_tests",
+    "confidence",
+    "suggested_test"
+  ]);
 });
 
 // A Claude subagent that only forwards one Bash call cost ~200k Claude tokens

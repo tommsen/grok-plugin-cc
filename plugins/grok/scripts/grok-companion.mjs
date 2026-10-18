@@ -40,12 +40,12 @@ import {
   upsertJob,
   writeJobFile
 } from "./lib/state.mjs";
-import { renderCancelReport, renderJobStatusReport, renderReviewResult, renderSetupReport, renderStatusReport, renderStoredJobResult, renderTaskResult, renderTransferResult } from "./lib/render.mjs";
+import { renderCancelReport, renderJobStatusReport, renderReviewResult, renderSetupReport, renderStatusReport, renderStoredJobResult, renderTaskResult, renderTestGapsResult, renderTransferResult } from "./lib/render.mjs";
 import { resolveClaudeSessionPath } from "./lib/transfer.mjs";
 import { resolveWorkspaceRoot } from "./lib/workspace.mjs";
 
 const ROOT_DIR = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
-const REVIEW_SCHEMA_PATH = path.join(ROOT_DIR, "schemas", "review-output.schema.json");
+const SCHEMAS_DIR = path.join(ROOT_DIR, "schemas");
 const VALID_EFFORTS = new Set(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 const DEFAULT_CONTINUE_PROMPT = "Continue the previous task from where it stopped.";
 
@@ -56,7 +56,8 @@ function printUsage() {
       "  node scripts/grok-companion.mjs setup [--probe] [--json]",
       "  node scripts/grok-companion.mjs review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
       "  node scripts/grok-companion.mjs adversarial-review [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
-      "  node scripts/grok-companion.mjs task [--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
+      "  node scripts/grok-companion.mjs test-gaps [--base <ref>] [--scope <auto|working-tree|branch>] [--model <model>] [focus text]",
+      "  node scripts/grok-companion.mjs task[--background] [--write] [--resume-last|--resume|--fresh] [--model <model>] [--effort <level>] [prompt]",
       "  node scripts/grok-companion.mjs transfer [--source <claude-jsonl>] [--json]",
       "  node scripts/grok-companion.mjs status [job-id] [--all] [--json]",
       "  node scripts/grok-companion.mjs result [job-id] [--json]",
@@ -133,8 +134,8 @@ function ensureGrokAvailable(cwd) {
   return availability;
 }
 
-function readReviewSchema() {
-  return JSON.parse(fs.readFileSync(REVIEW_SCHEMA_PATH, "utf8"));
+function readReviewSchema(name = "review-output") {
+  return JSON.parse(fs.readFileSync(path.join(SCHEMAS_DIR, `${name}.schema.json`), "utf8"));
 }
 
 function parseStructuredOutput(result) {
@@ -211,7 +212,7 @@ async function executeReviewRun(request) {
     prompt,
     model: request.model,
     mode: "review",
-    jsonSchema: readReviewSchema(),
+    jsonSchema: readReviewSchema(request.schemaName),
     onProgress: request.onProgress
   });
 
@@ -231,7 +232,7 @@ async function executeReviewRun(request) {
     exitStatus: result.status,
     grokSessionId: result.sessionId,
     payload,
-    rendered: renderReviewResult(parsed, {
+    rendered: (request.render ?? renderReviewResult)(parsed, {
       reviewLabel: request.reviewName,
       targetLabel: context.target.label,
       grokSessionId: result.sessionId,
@@ -285,6 +286,8 @@ async function handleReviewCommand(argv, config) {
         focusText,
         reviewName: config.reviewName,
         templateName: config.templateName,
+        schemaName: config.schemaName,
+        render: config.render,
         onProgress: progress
       }),
     { json: options.json }
@@ -620,6 +623,15 @@ async function main() {
         reviewName: "Adversarial Review",
         templateName: "adversarial-review",
         kind: "adversarial-review"
+      });
+      break;
+    case "test-gaps":
+      await handleReviewCommand(argv, {
+        reviewName: "Test-Gap Review",
+        templateName: "test-gaps",
+        kind: "test-gaps",
+        schemaName: "test-gaps-output",
+        render: renderTestGapsResult
       });
       break;
     case "task":

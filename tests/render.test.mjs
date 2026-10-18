@@ -7,8 +7,38 @@ import {
   renderStatusReport,
   renderStoredJobResult,
   renderTaskResult,
+  renderTestGapsResult,
   renderTransferResult
 } from "../plugins/grok/scripts/lib/render.mjs";
+
+test("renderTestGapsResult marks every gap as a prediction", () => {
+  const rendered = renderTestGapsResult(
+    {
+      result: {
+        summary: "One gap.",
+        gaps: [
+          {
+            mutation: "Skip cleanup of the prompt file",
+            file: "lib/grok.mjs",
+            line: 270,
+            surviving_tests: ["runGrokHeadless parses streaming output"],
+            breaking_tests: [],
+            confidence: 0.7,
+            suggested_test: "Assert the prompt file is gone after the run."
+          }
+        ]
+      },
+      rawOutput: "",
+      parseError: null
+    },
+    { targetLabel: "working tree diff", grokSessionId: "s1", warning: null }
+  );
+  assert.match(rendered, /Vorhersage, nicht gemessen/);
+  assert.match(rendered, /lib\/grok\.mjs:270/);
+  assert.match(rendered, /Stays green: runGrokHeadless parses streaming output/);
+  assert.match(rendered, /Breaks: \(none predicted\)/);
+  assert.match(rendered, /70%/);
+});
 
 test("renderReviewResult shows verdict and findings", () => {
   const rendered = renderReviewResult(

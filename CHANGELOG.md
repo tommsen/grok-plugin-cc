@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Grok as an adversary to the tests.
+
+- New `/grok:test-gaps`: predicts mutations of the change that every test would
+  let through, with the tests that stay green and those that would break; each
+  gap is marked as a prediction (Grok found four gaps Claude missed in a
+  double-blind comparison on 2026-09-27, but ran no mutation itself).
+- All review prompts tell Grok to read `CLAUDE.md` and `AGENTS.md` first and to
+  treat their rules as review criteria.
+
 Grok is called without a subagent.
 
 - The `grok:grok-rescue` subagent is gone. It forwarded one Bash call and cost

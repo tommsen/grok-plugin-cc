@@ -214,6 +214,33 @@ test("transfer rejects transcripts outside ~/.claude/projects", () => {
   assert.match(result.stderr, /only from/);
 });
 
+test("test-gaps runs a review with its own schema and prompt", () => {
+  fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('gaps');\n");
+  const gaps = {
+    summary: "One gap.",
+    gaps: [
+      {
+        mutation: "Drop the log call",
+        file: "app.js",
+        line: 1,
+        surviving_tests: ["none exist"],
+        breaking_tests: [],
+        confidence: 0.9,
+        suggested_test: "Assert the output."
+      }
+    ]
+  };
+  const payload = runJson(["test-gaps"], {
+    FAKE_GROK_JSON_OUTPUT: JSON.stringify({ text: JSON.stringify(gaps), structuredOutput: gaps, stopReason: "end_turn", sessionId: "s-gaps" })
+  });
+  assert.equal(payload.review, "Test-Gap Review");
+  assert.equal(payload.result.gaps[0].mutation, "Drop the log call");
+
+  const call = [...fake.readCalls()].reverse().find((c) => c.includes("--json-schema"));
+  assert.match(call[call.indexOf("--json-schema") + 1], /surviving_tests/);
+  assert.match(call[call.indexOf("-p") + 1], /stay green/i);
+});
+
 test("a cancelled grok run makes the companion exit non-zero", () => {
   const result = runCompanion(["task", "look", "around", "--json"], {
     cwd: repoDir,

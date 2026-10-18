@@ -113,6 +113,52 @@ export function renderReviewResult(parsed, { reviewLabel, targetLabel, grokSessi
   return `${lines.join("\n")}\n`;
 }
 
+// Grok predicts these gaps; nobody has run the mutations yet. The label says
+// so on every gap, because the reader acts on each one separately.
+export function renderTestGapsResult(parsed, { targetLabel, grokSessionId, warning = null }) {
+  const lines = [heading("Grok Test-Gap Review"), "", `Target: ${targetLabel}`];
+  if (grokSessionId) {
+    lines.push(`Grok session: ${grokSessionId} (resume with \`grok --resume ${grokSessionId}\`)`);
+  }
+  if (warning) {
+    lines.push(`Warning: ${warning}`);
+  }
+  lines.push("");
+
+  if (parsed.parseError) {
+    lines.push(`The review did not return valid structured output: ${parsed.parseError}`, "");
+    if (parsed.rawOutput) {
+      lines.push("Raw output:", "", "```", parsed.rawOutput.trim(), "```");
+    }
+    return `${lines.join("\n")}\n`;
+  }
+
+  const result = parsed.result;
+  lines.push(result.summary, "");
+  if (!result.gaps?.length) {
+    lines.push("No test gaps predicted.");
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push(heading(`Predicted gaps (${result.gaps.length})`), "");
+  result.gaps.forEach((gap, index) => {
+    const list = (tests) => (tests?.length ? tests.join("; ") : "(none predicted)");
+    lines.push(
+      `### ${index + 1}. ${gap.mutation}`,
+      "",
+      "_Vorhersage, nicht gemessen._",
+      "",
+      `- Location: ${gap.file}:${gap.line}`,
+      `- Confidence: ${Math.round(Number(gap.confidence ?? 0) * 100)}%`,
+      `- Stays green: ${list(gap.surviving_tests)}`,
+      `- Breaks: ${list(gap.breaking_tests)}`,
+      `- Suggested test: ${gap.suggested_test}`,
+      ""
+    );
+  });
+  return `${lines.join("\n")}\n`;
+}
+
 export function renderTaskResult({ rawOutput, failureMessage, grokSessionId, warning = null }, { title, jobId, write }) {
   const lines = [heading(title), ""];
   if (jobId) {

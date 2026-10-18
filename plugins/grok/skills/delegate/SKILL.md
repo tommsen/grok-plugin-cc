@@ -14,7 +14,9 @@ only forwards one Bash call cost about 200,000 Claude tokens per run (measured
 
 - **Adversary.** Predicting which mutation breaks which test - and which test
   stays green against every mutation. Ask for exactly that; it is the most
-  valuable part of an answer. Use `/grok:test-gaps` for diffs.
+  valuable part of an answer. For a diff, run `/grok:test-gaps`; then run the
+  top predicted mutations yourself (change the line, run the named tests,
+  restore the file) before reporting any of them as a finding.
 - **Not a measurer.** Grok predicts, Claude measures. Before passing on a claim
   of Grok's as a finding, verify it: run the mutation, read the cited line.
 - **No project history.** Grok does not know this project's rules. Write them
