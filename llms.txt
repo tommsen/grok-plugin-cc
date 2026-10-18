@@ -16,7 +16,7 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 
 - `/grok:review [--base <ref>] [--scope auto|working-tree|branch] [--wait|--background] [focus text]`: read-only code review; Grok runs with a `read_file,grep,list_dir` tool allowlist (no shell, no writes) and returns schema-validated findings (severity, file, line range, confidence, recommendation).
 - `/grok:adversarial-review [same flags] [focus text]`: same targeting, skeptical stance — challenges design decisions, trust boundaries, data-loss paths, races.
-- `/grok:rescue [--background|--wait] [--resume|--fresh] [--write] [--model <m>] [--effort <e>] <task>`: delegate a task to Grok; Claude calls the companion directly through Bash with the request in a file (no subagent); default is read-only (OS sandbox + file-edit tools removed), `--write` enables edits under Grok's workspace sandbox.
+- `/grok:rescue [--background|--wait] [--resume|--fresh] [--write] [--model <m>] [--effort <e>] <task>`: delegate a task to Grok; Claude calls the companion directly through Bash with the request in a file (no subagent); default is read-leaning (file-edit tools removed, OS read-only sandbox where the platform can enforce it, Grok keeps its shell), `--write` enables edits under Grok's workspace sandbox.
 - `/grok:ask <question>`: read-only second opinion; Claude weighs and verifies the answer.
 - `/grok:transfer [--source <claude-jsonl>]`: import the current Claude Code transcript into Grok via `grok import`; prints `grok --resume <session-id>` to continue in the Grok TUI.
 - `/grok:status [job-id] [--all]` / `/grok:result [job-id]` / `/grok:cancel [job-id]`: per-workspace background job control.

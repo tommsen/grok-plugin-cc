@@ -15,7 +15,7 @@ Get a second opinion from Grok on:
    - "Read CLAUDE.md and AGENTS.md at the repository root first, if present, and treat their rules as binding.",
    - "Read only. Do not modify any file.",
    - never credentials or the value of any secret.
-3. Run in the foreground:
+3. Run in the foreground, passing `timeout: 600000` (10 minutes, the maximum) on the `Bash` call; the default of 120000 ms would cut Grok off. If the question needs Grok to read many files, run it with `run_in_background: true` instead and report when the notification arrives:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/scripts/grok-companion.mjs" task --prompt-file "<path>"

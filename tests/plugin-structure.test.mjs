@@ -114,3 +114,26 @@ test("delegate skill tells Claude to call the companion through Bash, read-only 
   assert.match(body, /--write/);
   assert.doesNotMatch(body, /subagent_type/);
 });
+
+// The prose may mention --write as an opt-in, but no command line Claude would
+// copy may carry it: ask is read-only by contract, the delegate skill opt-in only.
+function bashBlocks(body) {
+  // Fenced blocks may be indented inside list items (SKILL.md).
+  return [...body.matchAll(/^[ \t]*```bash\n([\s\S]*?)\n[ \t]*```/gm)].map((match) => match[1]);
+}
+
+test("ask never passes --write; the delegate skill command line does not either", () => {
+  const ask = parseFrontmatter(path.join(PLUGIN_ROOT, "commands", "ask.md"));
+  const askBlocks = bashBlocks(ask.body);
+  assert.ok(askBlocks.some((block) => block.includes("grok-companion.mjs\" task")), "ask.md needs a bash block with the task call");
+  for (const block of askBlocks) {
+    assert.doesNotMatch(block, /--write/, "ask.md bash blocks must not contain --write");
+  }
+
+  const skill = parseFrontmatter(path.join(PLUGIN_ROOT, "skills", "delegate", "SKILL.md"));
+  const taskLines = bashBlocks(skill.body).flatMap((block) => block.split("\n")).filter((line) => line.includes("grok-companion.mjs\" task"));
+  assert.ok(taskLines.length > 0, "SKILL.md needs a bash block with the task call");
+  for (const line of taskLines) {
+    assert.doesNotMatch(line, /--write/, "the SKILL.md task command line must not contain --write");
+  }
+});
