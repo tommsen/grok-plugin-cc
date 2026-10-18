@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Grok is called without a subagent.
+
+- The `grok:grok-rescue` subagent is gone. It forwarded one Bash call and cost
+  about 200,000 Claude tokens per rescue (measured 2026-09-27); `/grok:rescue`
+  now calls the companion directly, with the request in a file.
+- New skill `grok:delegate`: lets Claude hand work to Grok on its own
+  initiative the same way — request as a file, read-only unless the user asks
+  for edits, background via Bash.
+- New `/grok:ask`: a read-only second opinion that Claude weighs and verifies.
+- The plugin-structure tests read CRLF checkouts.
+
 `setup` no longer reports a sign-in it cannot prove.
 
 - The grok CLI authenticates from `~/.grok/auth.json`; `XAI_API_KEY` is shown

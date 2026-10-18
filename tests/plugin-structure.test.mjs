@@ -7,6 +7,7 @@ import { PLUGIN_ROOT, REPO_ROOT } from "./helpers.mjs";
 
 const EXPECTED_COMMANDS = [
   "adversarial-review",
+  "ask",
   "cancel",
   "rescue",
   "result",
@@ -17,7 +18,8 @@ const EXPECTED_COMMANDS = [
 ];
 
 function parseFrontmatter(filePath) {
-  const content = fs.readFileSync(filePath, "utf8");
+  // Windows checkouts with core.autocrlf=true have CRLF line endings.
+  const content = fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");
   const match = content.match(/^---\n([\s\S]*?)\n---\n/);
   assert.ok(match, `${filePath} must start with YAML frontmatter`);
   const fields = {};
@@ -85,8 +87,30 @@ test("prompt templates carry the placeholders the companion interpolates", () =>
   }
 });
 
-test("rescue agent exists and forwards to the companion task runtime", () => {
-  const agent = fs.readFileSync(path.join(PLUGIN_ROOT, "agents", "grok-rescue.md"), "utf8");
-  assert.match(agent, /name: grok-rescue/);
-  assert.match(agent, /grok-companion\.mjs" task/);
+// A Claude subagent that only forwards one Bash call cost ~200k Claude tokens
+// per rescue (measured 2026-09-27); calling the companion directly costs none.
+test("no forwarding subagent ships with the plugin", () => {
+  assert.equal(fs.existsSync(path.join(PLUGIN_ROOT, "agents", "grok-rescue.md")), false);
+});
+
+test("rescue and ask call the companion directly with a prompt file", () => {
+  for (const command of ["rescue", "ask"]) {
+    const { fields, body } = parseFrontmatter(path.join(PLUGIN_ROOT, "commands", `${command}.md`));
+    assert.doesNotMatch(fields["allowed-tools"] ?? "", /\bAgent\b/, `${command}.md must not route through a subagent`);
+    assert.doesNotMatch(body, /subagent_type/, `${command}.md must not route through a subagent`);
+    assert.match(body, /grok-companion\.mjs" task/);
+    assert.match(body, /--prompt-file/);
+  }
+});
+
+test("delegate skill tells Claude to call the companion through Bash, read-only by default", () => {
+  const skillPath = path.join(PLUGIN_ROOT, "skills", "delegate", "SKILL.md");
+  assert.ok(fs.existsSync(skillPath), "missing skills/delegate/SKILL.md");
+  const { fields, body } = parseFrontmatter(skillPath);
+  assert.equal(fields.name, "delegate");
+  assert.ok(fields.description && fields.description.length > 40, "the description decides when Claude loads it");
+  assert.match(body, /grok-companion\.mjs" task --prompt-file/);
+  assert.match(body, /run_in_background/);
+  assert.match(body, /--write/);
+  assert.doesNotMatch(body, /subagent_type/);
 });

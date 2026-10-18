@@ -1,6 +1,6 @@
 # grok-plugin-cc
 
-> Claude Code plugin that runs xAI's Grok CLI from inside Claude Code: structured read-only code reviews, task delegation with resumable sessions, Claude-to-Grok session transfer, and background job control. 8 slash commands, 1 subagent, zero runtime dependencies, Node 18.18+, Apache-2.0. Unofficial community plugin by thevibeworks; the Grok counterpart to openai/codex-plugin-cc.
+> Claude Code plugin that runs xAI's Grok CLI from inside Claude Code: structured read-only code reviews, task delegation with resumable sessions, Claude-to-Grok session transfer, and background job control. 9 slash commands, 1 skill, zero runtime dependencies, Node 18.18+, Apache-2.0. Unofficial community plugin by thevibeworks; the Grok counterpart to openai/codex-plugin-cc.
 
 Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin/marketplace.json`, marketplace name `grok-cc`, plugin name `grok`). Not an npm package. Requires the user's own Grok CLI (`grok`) binary, installed via `curl -fsSL https://x.ai/cli/install.sh | bash` or `npm install -g @xai-official/grok`, authenticated by `grok login` (credentials in `~/.grok/auth.json`).
 
@@ -16,7 +16,8 @@ Distribution: a Claude Code plugin marketplace at the repo root (`.claude-plugin
 
 - `/grok:review [--base <ref>] [--scope auto|working-tree|branch] [--wait|--background] [focus text]`: read-only code review; Grok runs with a `read_file,grep,list_dir` tool allowlist (no shell, no writes) and returns schema-validated findings (severity, file, line range, confidence, recommendation).
 - `/grok:adversarial-review [same flags] [focus text]`: same targeting, skeptical stance — challenges design decisions, trust boundaries, data-loss paths, races.
-- `/grok:rescue [--background|--wait] [--resume|--fresh] [--write] [--model <m>] [--effort <e>] <task>`: delegate a task to Grok via the `grok:grok-rescue` subagent; default is read-leaning (OS sandbox + file-edit tools removed), `--write` enables edits under Grok's workspace sandbox.
+- `/grok:rescue [--background|--wait] [--resume|--fresh] [--write] [--model <m>] [--effort <e>] <task>`: delegate a task to Grok; Claude calls the companion directly through Bash with the request in a file (no subagent); default is read-only (OS sandbox + file-edit tools removed), `--write` enables edits under Grok's workspace sandbox.
+- `/grok:ask <question>`: read-only second opinion; Claude weighs and verifies the answer.
 - `/grok:transfer [--source <claude-jsonl>]`: import the current Claude Code transcript into Grok via `grok import`; prints `grok --resume <session-id>` to continue in the Grok TUI.
 - `/grok:status [job-id] [--all]` / `/grok:result [job-id]` / `/grok:cancel [job-id]`: per-workspace background job control.
 - `/grok:setup`: verifies Node, the grok binary, and authentication.

@@ -4,7 +4,7 @@
 
 **Use xAI's [Grok CLI](https://x.ai/cli) from inside Claude Code — code reviews, task delegation, session handoff.**
 
-8 commands · 1 rescue subagent · 0 runtime dependencies · Node 18.18+ · Apache-2.0
+9 commands · 1 skill · 0 runtime dependencies · Node 18.18+ · Apache-2.0
 
 [![CI](https://github.com/thevibeworks/grok-plugin-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/thevibeworks/grok-plugin-cc/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -23,7 +23,9 @@ This is the Grok counterpart to OpenAI's [codex-plugin-cc](https://github.com/op
 
 - `/grok:review` — read-only Grok code review of your working tree or branch, returned as structured findings (severity, file:line, confidence, recommendation)
 - `/grok:adversarial-review` — a steerable challenge review that attacks the design, not just the code
-- `/grok:rescue` — delegate investigation or fixes to Grok, foreground or background, resumable across calls
+- `/grok:rescue` — delegate investigation or fixes to Grok, foreground or background, resumable across calls; called directly through Bash, no subagent
+- `/grok:ask` — a read-only second opinion on a question; Claude weighs and verifies the answer
+- Skill `grok:delegate` — lets Claude hand work to Grok on its own initiative the same cheap way (request as a file, read-only unless asked)
 - `/grok:transfer` — import the current Claude Code conversation into Grok and continue it there
 - `/grok:status`, `/grok:result`, `/grok:cancel` — job control for background work
 - `/grok:setup` — prerequisite and auth checks
@@ -122,7 +124,7 @@ Same targeting as `/grok:review`, but the prompt instructs Grok to break confide
 
 ### `/grok:rescue`
 
-Hands a task to Grok through the `grok:grok-rescue` subagent.
+Hands a task to Grok. Claude writes the request to a file and calls the companion directly through Bash — no subagent, which saved about 200,000 Claude tokens per call in a measurement on 2026-09-27.
 
 ```bash
 /grok:rescue investigate why the tests started failing
@@ -137,7 +139,15 @@ Hands a task to Grok through the `grok:grok-rescue` subagent.
 - `--resume` continues the latest rescue session for this repo; `--fresh` forces a new one. Without either flag the plugin offers to continue when a resumable session exists.
 - Model and reasoning effort default to Grok's own choices; pass `--model` / `--effort` to override.
 
-You can also just ask: "Ask Grok to redesign the database connection to be more resilient."
+You can also just ask: "Ask Grok to redesign the database connection to be more resilient." The `grok:delegate` skill then makes the same direct call.
+
+### `/grok:ask`
+
+A read-only second opinion. Claude writes the question with the relevant paths to a file, Grok reads the repository itself, and Claude weighs the answer — agreeing, disagreeing, and checking every claim about the code against the code.
+
+```bash
+/grok:ask Is the retry loop in lib/jobs.mjs safe when two workers start at once?
+```
 
 ### `/grok:transfer`
 
