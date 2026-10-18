@@ -4,6 +4,7 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 
 import {
+  AGENT_CONTROL_TOOLS,
   MCP_META_TOOLS,
   PROMPT_ARG_MAX_CHARS,
   REVIEW_TOOL_ALLOWLIST,
@@ -57,7 +58,7 @@ test("review mode enforces the read-only tool allowlist", () => {
 test("task-read mode combines sandbox and write-tool denylist", () => {
   const args = buildHeadlessArgs({ prompt: "investigate", mode: "task-read", sandboxEnforced: true });
   assert.equal(pairValue(args, "--sandbox"), "read-only");
-  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`);
+  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS},${AGENT_CONTROL_TOOLS}`);
   assert.equal(pairValue(args, "--output-format"), "streaming-json");
 });
 
@@ -102,12 +103,32 @@ test("every mode disallows grok's MCP meta tools exactly once", () => {
   }
 });
 
+// The two modes that keep a shell and the full built-in tool set also expose
+// scheduling, subagent and media tools (measured 2026-10-18). Nothing may
+// outlive the run, so both modes must deny every one of them.
+test("task-read and task-write disallow every agent-control and media tool", () => {
+  // Spelled out here on purpose: reading the list from the constant under
+  // test would stay green when an entry is dropped from it.
+  const expected = [
+    "scheduler_create", "scheduler_delete", "scheduler_list", "workflow", "spawn_subagent",
+    "kill_command_or_subagent", "get_command_or_subagent_output",
+    "image_gen", "image_edit", "image_to_video", "reference_to_video"
+  ];
+  for (const mode of ["task-read", "task-write"]) {
+    const args = buildHeadlessArgs({ prompt: "x", sandboxEnforced: true, mode });
+    const values = pairValue(args, "--disallowed-tools").split(",");
+    for (const tool of expected) {
+      assert.ok(values.includes(tool), `${mode} must disallow ${tool}`);
+    }
+  }
+});
+
 // Without a kernel enforcer grok refuses to start rather than warning, so a
 // flag we cannot back up is a flag we must not send. #1.
 test("task-read drops the sandbox when the enforcer is missing, and keeps the deny list", () => {
   const args = buildHeadlessArgs({ prompt: "investigate", mode: "task-read", sandboxEnforced: false });
   assert.ok(!args.includes("--sandbox"), "an unenforceable sandbox flag must not be sent");
-  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`,
+  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS},${AGENT_CONTROL_TOOLS}`,
     "the tool-level guard is what still stops writes");
 });
 
@@ -265,7 +286,7 @@ test("classifyCompletion fails aborted and empty runs and warns on the turn limi
   assert.deepEqual(classifyCompletion({ stopReason: "end_turn", text: "ok" }), { failure: null, warning: null });
 });
 
-// Measured 2026-10-18 with grok 0.2.x and --max-turns 1: the turn limit does
+// Measured 2026-10-18 with grok 1.0.46 and --max-turns 1: the turn limit does
 // not come back as "max_turns" but as stopReason "cancelled" (lowercase), the
 // same word an aborted login produces. Only num_turns tells them apart.
 test("classifyCompletion tells a turn limit from an aborted sign-in by num_turns", () => {
@@ -280,6 +301,9 @@ test("classifyCompletion tells a turn limit from an aborted sign-in by num_turns
   assert.match(classifyCompletion({ stopReason: "cancelled", text: "", numTurns: 0, maxTurns: 50 }).failure, /\/grok:setup/);
   // No turn count reported: cannot claim a turn limit.
   assert.match(classifyCompletion({ stopReason: "cancelled", text: "partial" }).failure, /\/grok:setup/);
+  // The session id appears only when known.
+  assert.match(classifyCompletion({ stopReason: "cancelled", text: "", sessionId: "abc" }).failure, /session: abc/);
+  assert.doesNotMatch(classifyCompletion({ stopReason: "cancelled", text: "" }).failure, /session/);
 });
 
 // grok exits 0 even when it aborted the run (measured 2026-08-10 in
@@ -292,6 +316,8 @@ test("runGrokHeadless treats a cancelled run that exits 0 as a failure", async (
     assert.match(result.error.message, /Cancelled/);
     // The empty-answer rule would also fail this run; pin the abort rule itself.
     assert.match(result.error.message, /stopped the run/);
+    // The session id is in the message so the run can be found or resumed.
+    assert.match(result.error.message, /session: s-cancel/);
   } finally {
     delete process.env.FAKE_GROK_JSON_OUTPUT;
   }

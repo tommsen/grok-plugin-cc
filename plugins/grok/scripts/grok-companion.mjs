@@ -385,19 +385,37 @@ function checkProposedPatch(workspaceRoot, jobId, patch) {
   const text = String(patch ?? "");
   fs.writeFileSync(patchFile, text === "" || text.endsWith("\n") ? text : `${text}\n`, "utf8");
   if (!text.trim()) {
-    return { patchFile, ok: false, output: "grok proposed an empty patch.", stat: "" };
+    return { patchFile, ok: false, whitespaceIgnored: false, output: "grok proposed an empty patch.", stat: "" };
   }
-  // --ignore-whitespace: grok writes LF diffs. Measured 2026-10-18 (git
+  // Whitespace-strict first. grok writes LF diffs. Measured 2026-10-18 (git
   // 2.54.0.windows.1): with the file committed as CRLF and autocrlf=false,
   // `git apply --check` fails for such a patch ("patch does not apply") and
   // passes with --ignore-whitespace. A normal Windows checkout (autocrlf=true)
-  // passes either way, so the flag only widens what is accepted.
-  const check = runCommand("git", ["apply", "--check", "--ignore-whitespace", patchFile], { cwd: workspaceRoot });
-  const stat = runCommand("git", ["apply", "--stat", "--ignore-whitespace", patchFile], { cwd: workspaceRoot });
+  // passes the strict check, so the flag is used only when the strict one
+  // fails: --ignore-whitespace also accepts a patch whose context differs only
+  // in whitespace, which the strict check would have caught.
+  let whitespaceIgnored = false;
+  let check = runCommand("git", ["apply", "--check", patchFile], { cwd: workspaceRoot });
+  if (check.error || check.status !== 0) {
+    const relaxed = runCommand("git", ["apply", "--check", "--ignore-whitespace", patchFile], { cwd: workspaceRoot });
+    if (!relaxed.error && relaxed.status === 0) {
+      check = relaxed;
+      whitespaceIgnored = true;
+    }
+    // When both fail, the strict failure is the one reported.
+  }
+  const ok = !check.error && check.status === 0;
+  // The stat call uses the mode that made the check pass.
+  const stat = runCommand(
+    "git",
+    ["apply", "--stat", ...(whitespaceIgnored ? ["--ignore-whitespace"] : []), patchFile],
+    { cwd: workspaceRoot }
+  );
   return {
     patchFile,
-    ok: !check.error && check.status === 0,
-    output: !check.error && check.status === 0 ? "" : check.error?.message ?? formatCommandFailure(check),
+    ok,
+    whitespaceIgnored,
+    output: ok ? "" : check.error?.message ?? formatCommandFailure(check),
     stat: stat.status === 0 ? String(stat.stdout ?? "").trim() : ""
   };
 }
@@ -419,8 +437,8 @@ async function executeProposalRun(request) {
   });
 
   const parsed = parseStructuredOutput(result);
-  const jobId = request.jobId ?? `proposal-${Date.now()}`;
-  const check = parsed.result ? checkProposedPatch(workspaceRoot, jobId, parsed.result.patch) : null;
+  // handleTask always sets jobId before a proposal run starts.
+  const check = parsed.result ? checkProposedPatch(workspaceRoot, request.jobId, parsed.result.patch) : null;
   // A patch that does not apply is a failed run: Claude must not treat it as done.
   const failed = result.status !== 0 || !parsed.result || !check.ok;
 
@@ -435,7 +453,9 @@ async function executeProposalRun(request) {
       proposal: parsed.result,
       parseError: parsed.parseError,
       patchFile: check?.patchFile ?? null,
-      check: check ? { ok: check.ok, output: check.output, stat: check.stat } : null
+      check: check
+        ? { ok: check.ok, whitespaceIgnored: check.whitespaceIgnored, output: check.output, stat: check.stat }
+        : null
     },
     rendered: renderProposalResult(
       {

@@ -236,12 +236,20 @@ export function renderProposalResult({ parsed, check, grokSessionId, warning = n
   if (failure) {
     lines.push("", `Grok reported a failure: ${failure}`);
   }
-  lines.push(
-    "",
-    check?.ok && !failure
-      ? `Review the patch, then apply it with \`git apply --ignore-whitespace "${check.patchFile}"\`.`
-      : "Do not apply this patch. Ask grok to fix it (`--resume-last --propose`) or change it yourself."
-  );
+  if (check?.ok && !failure) {
+    // Apply exactly what was checked: the flag appears only when the strict
+    // check failed and the relaxed one passed.
+    const flag = check.whitespaceIgnored ? " --ignore-whitespace" : "";
+    lines.push("", `Review the patch, then apply it with \`git apply${flag} "${check.patchFile}"\`.`);
+    if (check.whitespaceIgnored) {
+      lines.push("Checked with --ignore-whitespace: after applying, check line endings and `git diff`.");
+    }
+  } else {
+    lines.push(
+      "",
+      "Do not apply this patch. Ask grok to fix it (`--resume-last --propose`) or change it yourself."
+    );
+  }
   return `${lines.join("\n")}\n`;
 }
 

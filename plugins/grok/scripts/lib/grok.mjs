@@ -25,6 +25,28 @@ export const TASK_READ_DISALLOWED_TOOLS = "search_replace,write";
 // browser page). With `--disallowed-tools search_tool,use_tool` added, grok
 // reported only read_file, list_dir and grep. Every mode therefore passes them.
 export const MCP_META_TOOLS = "search_tool,use_tool";
+// Tools that let a run start work which outlives it, or spend money. Measured
+// 2026-10-18 (grok 1.0.46, grok's own report of its tool list in task-read and
+// task-write): scheduler_*, workflow, spawn_subagent, kill_command_or_subagent,
+// get_command_or_subagent_output and the four media generators were all
+// present. Nothing may outlive the run (the companion cancels jobs when the
+// Claude session ends, but not what grok itself schedules or spawns); whether
+// subagents inherit the deny list is not measured; the media tools are not
+// needed for code work and are likely paid. Only task-read and task-write
+// need this: review and task-propose are cut down by their `--tools` allowlist.
+export const AGENT_CONTROL_TOOLS = [
+  "scheduler_create",
+  "scheduler_delete",
+  "scheduler_list",
+  "workflow",
+  "spawn_subagent",
+  "kill_command_or_subagent",
+  "get_command_or_subagent_output",
+  "image_gen",
+  "image_edit",
+  "image_to_video",
+  "reference_to_video"
+].join(",");
 
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_MAX_TURNS = 50;
@@ -80,7 +102,7 @@ const TURN_LIMIT_WARNING = "grok hit its turn limit; the answer may be incomplet
 // sign-in returns, so the stopReason alone cannot tell them apart -- num_turns
 // reaching maxTurns does. "maxturns" stays recognised in case another grok
 // build spells it out.
-export function classifyCompletion({ stopReason, text, structuredOutput, numTurns, maxTurns }) {
+export function classifyCompletion({ stopReason, text, structuredOutput, numTurns, maxTurns, sessionId }) {
   const normalized = normalizeStopReason(stopReason);
   const hasText = String(text ?? "").trim() !== "";
   const hitTurnLimit =
@@ -96,7 +118,9 @@ export function classifyCompletion({ stopReason, text, structuredOutput, numTurn
   if (FAILURE_STOP_REASONS.has(normalized)) {
     const hint =
       normalized === "cancelled" ? " Cancelled usually means grok could not authenticate; run /grok:setup." : "";
-    return { failure: `grok stopped the run (stopReason: ${stopReason}).${hint}`, warning: null };
+    // The session id lets the user look the run up or resume it.
+    const session = sessionId ? `, session: ${sessionId}` : "";
+    return { failure: `grok stopped the run (stopReason: ${stopReason}${session}).${hint}`, warning: null };
   }
   if (!hasText && !structuredOutput) {
     return { failure: `grok returned an empty response (stopReason: ${stopReason ?? "none"}).`, warning: null };
@@ -245,7 +269,7 @@ export function buildHeadlessArgs(options = {}) {
         args.push("--sandbox", "read-only");
       }
       // One combined value: whether grok accepts the flag twice is not measured.
-      args.push("--disallowed-tools", `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`);
+      args.push("--disallowed-tools", `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS},${AGENT_CONTROL_TOOLS}`);
       args.push("--always-approve");
       break;
     case "task-write":
@@ -261,7 +285,7 @@ export function buildHeadlessArgs(options = {}) {
         args.push("--sandbox", "workspace");
       }
       // Code work never needs the user's MCP servers (decision 2026-10-18).
-      args.push("--disallowed-tools", MCP_META_TOOLS);
+      args.push("--disallowed-tools", `${MCP_META_TOOLS},${AGENT_CONTROL_TOOLS}`);
       args.push("--always-approve");
       break;
     default:
@@ -438,7 +462,8 @@ export function runGrokHeadless(cwd, options = {}) {
           stopReason: streamResult.stopReason,
           text: streamResult.text,
           numTurns: streamResult.numTurns,
-          maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS
+          maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+          sessionId: streamResult.sessionId
         });
         const failure = streamResult.errorMessage ?? exitFailure ?? completion.failure;
         finish({
@@ -480,7 +505,8 @@ export function runGrokHeadless(cwd, options = {}) {
         text: value.text,
         structuredOutput,
         numTurns: value.num_turns,
-        maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS
+        maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+        sessionId: value.sessionId
       });
       const failure = exitFailure ?? completion.failure;
       finish({

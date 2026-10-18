@@ -164,7 +164,11 @@ test("proposal hand-over uses the proposal line, the CRLF-safe apply and the tes
   // The skill wraps its lines; compare on collapsed whitespace.
   for (const body of [rescue, skill].map((text) => text.replace(/\s+/g, " "))) {
     assert.match(body, /You cannot modify files\. Deliver the complete change as a unified diff in the patch field\./);
-    assert.match(body, /git apply --ignore-whitespace "<patch file>"/);
+    // Apply exactly what the output shows; the flag only when the check needed it.
+    assert.match(body, /exactly the command the output shows/);
+    assert.match(body, /git apply "<patch file>"/);
+    assert.match(body, /--ignore-whitespace/);
+    assert.match(body, /check line endings and `git diff`/);
     assert.match(body, /installs, downloads, or writes outside the repository/);
     assert.match(body, /`package\.json` script/);
   }

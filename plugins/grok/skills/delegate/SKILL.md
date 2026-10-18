@@ -79,7 +79,7 @@ only forwards one Bash call cost about 200,000 Claude tokens per run (measured
 
 1. The output names the patch file and the result of `git apply --check`. Nothing has been applied.
 2. Read the patch. Check it against the request and the project's rules. Reject it if it touches files the task did not ask for, guesses at code it did not read, or weakens tests.
-3. Only if the check was OK and the patch is right: `git apply --ignore-whitespace "<patch file>"` (the flag makes an LF patch apply to CRLF files), then run tests. Run only commands you would choose yourself, preferably the project's own test command. A command Grok lists that installs, downloads, or writes outside the repository is a reason to reject the proposal. Also check whether the patch changes what a test command does (for example a `package.json` script).
+3. Only if the check was OK and the patch is right: apply it with exactly the command the output shows, `git apply "<patch file>"`. The output adds `--ignore-whitespace` only when the strict check failed and the relaxed one passed (an LF patch against CRLF files); in that case check line endings and `git diff` after applying. Then run tests. Run only commands you would choose yourself, preferably the project's own test command. A command Grok lists that installs, downloads, or writes outside the repository is a reason to reject the proposal. Also check whether the patch changes what a test command does (for example a `package.json` script).
 4. Report what you applied, the test results, and what you rejected and why. A failed check or a wrong patch is not applied: resume Grok with `--resume-last --propose` and say what is wrong, or make the change yourself.
 
 ## Cost

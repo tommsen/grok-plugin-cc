@@ -267,10 +267,22 @@ const PROPOSED_PATCH = [
 ].join("\n");
 
 test("task --propose stores a checked patch and changes no file", () => {
+  // Also covers the rendered view: with a strict pass the apply line has no flag.
+  fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('before');\n");
+  const text = runCompanion(["task", "--propose", "change", "the", "log", "text"], {
+    cwd: repoDir,
+    env: { ...baseEnv, FAKE_GROK_JSON_OUTPUT: proposalOutput(PROPOSED_PATCH) }
+  });
+  assert.equal(text.status, 0, `stderr: ${text.stderr}`);
+  assert.match(text.stdout, /git apply "/);
+  assert.doesNotMatch(text.stdout, /--ignore-whitespace/);
+
   fs.writeFileSync(path.join(repoDir, "app.js"), "console.log('before');\n");
   const payload = runJson(["task", "--propose", "change", "the", "log", "text"], { FAKE_GROK_JSON_OUTPUT: proposalOutput(PROPOSED_PATCH) });
 
   assert.equal(payload.check.ok, true, payload.check.output);
+  // Whitespace-strict check first: a clean LF case must not need the relaxed flag.
+  assert.equal(payload.check.whitespaceIgnored, false);
   assert.equal(fs.readFileSync(payload.patchFile, "utf8"), PROPOSED_PATCH);
   assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\n", "the companion must not apply");
 
@@ -304,6 +316,7 @@ test("task --propose accepts an LF patch for a CRLF work-tree file", () => {
   const payload = runJson(["task", "--propose", "change", "the", "log", "text"], { FAKE_GROK_JSON_OUTPUT: proposalOutput(PROPOSED_PATCH) });
 
   assert.equal(payload.check.ok, true, payload.check.output);
+  assert.equal(payload.check.whitespaceIgnored, true, "only the relaxed check passes here");
   assert.equal(fs.readFileSync(path.join(repoDir, "app.js"), "utf8"), "console.log('before');\r\n", "the companion must not apply");
 });
 

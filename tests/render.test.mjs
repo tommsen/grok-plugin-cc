@@ -30,9 +30,25 @@ test("renderProposalResult says nothing was applied and how to apply", () => {
   );
   assert.match(ok, /grok changed no file/);
   assert.match(ok, /git apply --check: OK — not applied yet/);
-  assert.match(ok, /git apply --ignore-whitespace "\/s\/jobs\/task-1\.patch"/);
+  // A strict pass applies without the flag and without the line-ending warning.
+  assert.match(ok, /git apply "\/s\/jobs\/task-1\.patch"/);
+  assert.doesNotMatch(ok, /--ignore-whitespace/);
   assert.match(ok, /`node app\.js`/);
   assert.match(ok, /None known\./);
+
+  // Only the relaxed check passed: the command carries the flag and the output
+  // tells Claude to look at line endings afterwards.
+  const relaxed = renderProposalResult(
+    {
+      parsed: { result: proposal, rawOutput: "", parseError: null },
+      check: { patchFile: "/s/jobs/task-4.patch", ok: true, whitespaceIgnored: true, output: "", stat: " app.js | 2 +-" },
+      grokSessionId: "s4",
+      warning: null
+    },
+    { jobId: "task-4" }
+  );
+  assert.match(relaxed, /git apply --ignore-whitespace "\/s\/jobs\/task-4\.patch"/);
+  assert.match(relaxed, /Checked with --ignore-whitespace: after applying, check line endings and `git diff`/);
 
   const failed = renderProposalResult(
     {
