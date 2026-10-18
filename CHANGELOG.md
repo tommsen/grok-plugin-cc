@@ -5,10 +5,11 @@
 Grok can no longer start work that outlives a run.
 
 - Default rescues and `--write` runs also deny `scheduler_*`, `workflow`,
-  `spawn_subagent`, `kill_command_or_subagent`, `get_command_or_subagent_output`
-  and the media tools (`image_gen`, `image_edit`, `image_to_video`,
-  `reference_to_video`); all were present in a measured tool list (grok 1.0.46,
-  2026-10-18).
+  `spawn_subagent` and the media tools (`image_gen`, `image_edit`,
+  `image_to_video`, `reference_to_video`); all were present in a measured tool
+  list (grok 1.0.46, 2026-10-18). `kill_command_or_subagent` and
+  `get_command_or_subagent_output` stay allowed: grok refuses to start without
+  them because its shell's background mode needs them.
 - The proposal check is whitespace-strict first and falls back to
   `--ignore-whitespace` only when needed; the output reports which was used and
   the apply command it shows matches.

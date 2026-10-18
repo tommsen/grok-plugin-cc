@@ -111,14 +111,21 @@ test("task-read and task-write disallow every agent-control and media tool", () 
   // test would stay green when an entry is dropped from it.
   const expected = [
     "scheduler_create", "scheduler_delete", "scheduler_list", "workflow", "spawn_subagent",
-    "kill_command_or_subagent", "get_command_or_subagent_output",
     "image_gen", "image_edit", "image_to_video", "reference_to_video"
   ];
+  // Measured 2026-10-18 (grok 1.0.46): denying these two makes grok refuse to
+  // start -- "tool GrokBuild:run_terminal_cmd: enabled_background=true requires
+  // GrokBuild:get_task_output and GrokBuild:kill_task so background bash tasks
+  // can be observed and cancelled". The shell's background mode needs them.
+  const required = ["kill_command_or_subagent", "get_command_or_subagent_output"];
   for (const mode of ["task-read", "task-write"]) {
     const args = buildHeadlessArgs({ prompt: "x", sandboxEnforced: true, mode });
     const values = pairValue(args, "--disallowed-tools").split(",");
     for (const tool of expected) {
       assert.ok(values.includes(tool), `${mode} must disallow ${tool}`);
+    }
+    for (const tool of required) {
+      assert.ok(!values.includes(tool), `${mode} must NOT disallow ${tool} (grok would not start)`);
     }
   }
 });

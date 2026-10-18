@@ -27,21 +27,25 @@ export const TASK_READ_DISALLOWED_TOOLS = "search_replace,write";
 export const MCP_META_TOOLS = "search_tool,use_tool";
 // Tools that let a run start work which outlives it, or spend money. Measured
 // 2026-10-18 (grok 1.0.46, grok's own report of its tool list in task-read and
-// task-write): scheduler_*, workflow, spawn_subagent, kill_command_or_subagent,
-// get_command_or_subagent_output and the four media generators were all
-// present. Nothing may outlive the run (the companion cancels jobs when the
+// task-write): scheduler_*, workflow, spawn_subagent and the four media
+// generators were all present. Nothing may outlive the run (the companion cancels jobs when the
 // Claude session ends, but not what grok itself schedules or spawns); whether
 // subagents inherit the deny list is not measured; the media tools are not
 // needed for code work and are likely paid. Only task-read and task-write
 // need this: review and task-propose are cut down by their `--tools` allowlist.
+//
+// kill_command_or_subagent and get_command_or_subagent_output are deliberately
+// NOT listed. Measured 2026-10-18 (grok 1.0.46): denying them makes grok refuse
+// to start ("tool GrokBuild:run_terminal_cmd: enabled_background=true requires
+// GrokBuild:get_task_output and GrokBuild:kill_task so background bash tasks can
+// be observed and cancelled"). run_terminal_command's background mode needs
+// them; with spawn_subagent denied they only manage shell commands.
 export const AGENT_CONTROL_TOOLS = [
   "scheduler_create",
   "scheduler_delete",
   "scheduler_list",
   "workflow",
   "spawn_subagent",
-  "kill_command_or_subagent",
-  "get_command_or_subagent_output",
   "image_gen",
   "image_edit",
   "image_to_video",
