@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+Aborted runs no longer pass as empty successes.
+
+- grok exits 0 when it aborts a run (a failed sign-in returns
+  `stopReason: "Cancelled"` with empty text). The companion now treats
+  `cancelled`, `error` and `refusal` — compared without case or underscores —
+  and empty answers as failures and exits non-zero. A turn limit is passed
+  through as a visible warning. grok reports the limit as `cancelled` with
+  `num_turns` equal to `--max-turns` (measured), so that combination is the
+  warning, not the failure.
+- Plain text printed before the JSON body (device login) is skipped.
+- The run result now carries `warning` and `costUsd`.
+
 Fixed reviews of large diffs failing before Grok started.
 
 - `/grok:review` and `/grok:adversarial-review` passed the whole prompt,

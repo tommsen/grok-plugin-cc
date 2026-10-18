@@ -8,6 +8,8 @@ import {
   REVIEW_TOOL_ALLOWLIST,
   TASK_READ_DISALLOWED_TOOLS,
   buildHeadlessArgs,
+  classifyCompletion,
+  normalizeStopReason,
   sandboxEnforcerAvailable,
   importClaudeSession,
   runGrokHeadless,
@@ -210,6 +212,127 @@ test("runGrokHeadless surfaces error objects from grok", async () => {
   delete process.env.FAKE_GROK_EXIT_CODE;
   assert.notEqual(result.status, 0);
   assert.match(result.error.message, /Couldn't start session/);
+});
+
+test("stop reasons are compared without case or underscores", () => {
+  assert.equal(normalizeStopReason("end_turn"), "endturn");
+  assert.equal(normalizeStopReason("Cancelled"), "cancelled");
+  assert.equal(normalizeStopReason("MaxTurns"), "maxturns");
+  assert.equal(normalizeStopReason(undefined), "");
+});
+
+test("classifyCompletion fails aborted and empty runs and warns on the turn limit", () => {
+  assert.match(classifyCompletion({ stopReason: "Cancelled", text: "" }).failure, /Cancelled[\s\S]*\/grok:setup/);
+  assert.match(classifyCompletion({ stopReason: "refusal", text: "no" }).failure, /refusal/);
+  assert.match(classifyCompletion({ stopReason: "end_turn", text: "  " }).failure, /empty response/);
+  assert.equal(classifyCompletion({ stopReason: "end_turn", text: "", structuredOutput: { a: 1 } }).failure, null);
+  const limited = classifyCompletion({ stopReason: "max_turns", text: "partial" });
+  assert.equal(limited.failure, null);
+  assert.match(limited.warning, /turn limit/);
+  assert.deepEqual(classifyCompletion({ stopReason: "end_turn", text: "ok" }), { failure: null, warning: null });
+});
+
+// Measured 2026-10-18 with grok 0.2.x and --max-turns 1: the turn limit does
+// not come back as "max_turns" but as stopReason "cancelled" (lowercase), the
+// same word an aborted login produces. Only num_turns tells them apart.
+test("classifyCompletion tells a turn limit from an aborted sign-in by num_turns", () => {
+  const limited = classifyCompletion({ stopReason: "cancelled", text: "partial", numTurns: 50, maxTurns: 50 });
+  assert.equal(limited.failure, null);
+  assert.match(limited.warning, /turn limit/);
+  // Turn limit reached before any answer text: still the turn limit, but nothing to show.
+  const empty = classifyCompletion({ stopReason: "cancelled", text: "", numTurns: 50, maxTurns: 50 });
+  assert.match(empty.failure, /turn limit/);
+  assert.doesNotMatch(empty.failure, /\/grok:setup/);
+  // Cancelled well below the limit keeps the sign-in hint.
+  assert.match(classifyCompletion({ stopReason: "cancelled", text: "", numTurns: 0, maxTurns: 50 }).failure, /\/grok:setup/);
+  // No turn count reported: cannot claim a turn limit.
+  assert.match(classifyCompletion({ stopReason: "cancelled", text: "partial" }).failure, /\/grok:setup/);
+});
+
+// grok exits 0 even when it aborted the run (measured 2026-08-10 in
+// Projects/Grok: failed device login -> stopReason "Cancelled", empty text).
+test("runGrokHeadless treats a cancelled run that exits 0 as a failure", async () => {
+  process.env.FAKE_GROK_JSON_OUTPUT = JSON.stringify({ text: "", stopReason: "Cancelled", sessionId: "s-cancel" });
+  try {
+    const result = await runGrokHeadless(tempDir, { prompt: "review", mode: "review", jsonSchema: { type: "object" } });
+    assert.notEqual(result.status, 0);
+    assert.match(result.error.message, /Cancelled/);
+    // The empty-answer rule would also fail this run; pin the abort rule itself.
+    assert.match(result.error.message, /stopped the run/);
+  } finally {
+    delete process.env.FAKE_GROK_JSON_OUTPUT;
+  }
+});
+
+test("runGrokHeadless treats an empty streamed answer as a failure", async () => {
+  process.env.FAKE_GROK_STREAM_OUTPUT = `${JSON.stringify({ type: "end", stopReason: "end_turn", sessionId: "s-empty" })}\n`;
+  try {
+    const result = await runGrokHeadless(tempDir, { prompt: "hello", mode: "task-read" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.error.message, /empty response/);
+  } finally {
+    delete process.env.FAKE_GROK_STREAM_OUTPUT;
+  }
+});
+
+test("runGrokHeadless passes a turn-limit warning through", async () => {
+  process.env.FAKE_GROK_STREAM_OUTPUT =
+    [
+      { type: "text", data: "partial" },
+      { type: "end", stopReason: "max_turns", sessionId: "s-max" }
+    ]
+      .map((event) => JSON.stringify(event))
+      .join("\n") + "\n";
+  try {
+    const result = await runGrokHeadless(tempDir, { prompt: "hello", mode: "task-read" });
+    assert.equal(result.status, 0);
+    assert.equal(result.error, null);
+    assert.match(result.warning, /turn limit/);
+  } finally {
+    delete process.env.FAKE_GROK_STREAM_OUTPUT;
+  }
+});
+
+// The shape below is the real end event measured 2026-10-18 at --max-turns 1:
+// exit 0, stopReason "cancelled", num_turns equal to the limit, cost attached.
+test("runGrokHeadless reports a streamed turn limit as a warning and keeps the cost", async () => {
+  process.env.FAKE_GROK_STREAM_OUTPUT =
+    [
+      { type: "text", data: "partial" },
+      { type: "end", stopReason: "cancelled", sessionId: "s-limit", num_turns: 3, total_cost_usd: 0.0607 }
+    ]
+      .map((event) => JSON.stringify(event))
+      .join("\n") + "\n";
+  try {
+    const result = await runGrokHeadless(tempDir, { prompt: "hello", mode: "task-read", maxTurns: 3 });
+    assert.equal(result.status, 0, result.error?.message);
+    assert.equal(result.error, null);
+    assert.match(result.warning, /turn limit/);
+    assert.equal(result.text, "partial");
+    assert.equal(result.costUsd, 0.0607);
+  } finally {
+    delete process.env.FAKE_GROK_STREAM_OUTPUT;
+  }
+});
+
+test("runGrokHeadless skips login chatter printed before the JSON and reports cost", async () => {
+  process.env.FAKE_GROK_JSON_OUTPUT =
+    "Open https://accounts.x.ai/device and enter ABCD-1234\n" +
+    JSON.stringify({
+      text: "{}",
+      structuredOutput: { verdict: "approve" },
+      stopReason: "end_turn",
+      sessionId: "s-login",
+      total_cost_usd: 0.031
+    });
+  try {
+    const result = await runGrokHeadless(tempDir, { prompt: "review", mode: "review", jsonSchema: { type: "object" } });
+    assert.equal(result.status, 0, result.error?.message);
+    assert.equal(result.structuredOutput.verdict, "approve");
+    assert.equal(result.costUsd, 0.031);
+  } finally {
+    delete process.env.FAKE_GROK_JSON_OUTPUT;
+  }
 });
 
 test("importClaudeSession resolves imported record", async () => {

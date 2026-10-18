@@ -213,7 +213,7 @@ async function executeReviewRun(request) {
     target,
     grokSessionId: result.sessionId,
     context: { repoRoot: context.repoRoot, branch: context.branch, summary: context.summary, inputMode: context.inputMode },
-    grok: { status: result.status, stopReason: result.stopReason, stderr: result.stderr },
+    grok: { status: result.status, stopReason: result.stopReason, warning: result.warning, stderr: result.stderr },
     result: parsed.result,
     rawOutput: parsed.rawOutput,
     parseError: parsed.parseError
@@ -226,7 +226,8 @@ async function executeReviewRun(request) {
     rendered: renderReviewResult(parsed, {
       reviewLabel: request.reviewName,
       targetLabel: context.target.label,
-      grokSessionId: result.sessionId
+      grokSessionId: result.sessionId,
+      warning: result.warning
     }),
     summary: parsed.result?.summary ?? parsed.parseError ?? `${request.reviewName} finished.`,
     jobTitle: `Grok ${request.reviewName}`,
@@ -330,7 +331,7 @@ async function executeTaskRun(request) {
   const taskMetadata = buildTaskRunMetadata({ prompt: request.prompt, resumeLast: request.resumeLast });
   const failureMessage = result.error?.message ?? null;
   const rendered = renderTaskResult(
-    { rawOutput: result.text, failureMessage, grokSessionId: result.sessionId },
+    { rawOutput: result.text, failureMessage, grokSessionId: result.sessionId, warning: result.warning },
     { title: taskMetadata.title, jobId: request.jobId ?? null, write: Boolean(request.write) }
   );
 
@@ -340,6 +341,7 @@ async function executeTaskRun(request) {
     payload: {
       status: result.status,
       stopReason: result.stopReason,
+      warning: result.warning,
       grokSessionId: result.sessionId,
       rawOutput: result.text
     },

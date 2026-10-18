@@ -66,10 +66,13 @@ function renderFinding(finding, index) {
   ].join("\n");
 }
 
-export function renderReviewResult(parsed, { reviewLabel, targetLabel, grokSessionId }) {
+export function renderReviewResult(parsed, { reviewLabel, targetLabel, grokSessionId, warning = null }) {
   const lines = [heading(`Grok ${reviewLabel}`), "", `Target: ${targetLabel}`];
   if (grokSessionId) {
     lines.push(`Grok session: ${grokSessionId} (resume with \`grok --resume ${grokSessionId}\`)`);
+  }
+  if (warning) {
+    lines.push(`Warning: ${warning}`);
   }
   lines.push("");
 
@@ -104,7 +107,7 @@ export function renderReviewResult(parsed, { reviewLabel, targetLabel, grokSessi
   return `${lines.join("\n")}\n`;
 }
 
-export function renderTaskResult({ rawOutput, failureMessage, grokSessionId }, { title, jobId, write }) {
+export function renderTaskResult({ rawOutput, failureMessage, grokSessionId, warning = null }, { title, jobId, write }) {
   const lines = [heading(title), ""];
   if (jobId) {
     lines.push(`Job: ${jobId}`);
@@ -112,6 +115,9 @@ export function renderTaskResult({ rawOutput, failureMessage, grokSessionId }, {
   lines.push(`Mode: ${write ? "write-enabled" : "read-only investigation"}`);
   if (grokSessionId) {
     lines.push(`Grok session: ${grokSessionId} (resume with \`grok --resume ${grokSessionId}\`)`);
+  }
+  if (warning) {
+    lines.push(`Warning: ${warning}`);
   }
   lines.push("");
 

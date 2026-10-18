@@ -207,6 +207,8 @@ Model and effort defaults come from your own Grok config (`~/.grok/config.toml`)
 
 Prompts longer than 8000 characters — in practice every review of a sizeable diff — are handed over with `--prompt-file` instead of `-p`, through a private temp file that is removed when Grok exits. Windows caps the whole command line at 32767 characters and Linux caps a single argument at 128 KiB; passing the diff inline failed with `spawn ENAMETOOLONG` / `E2BIG` before Grok ever ran. Short prompts still use `-p`.
 
+grok exits 0 even when it aborts a run, so the companion reads `stopReason` instead of trusting the exit code: `Cancelled`, `error` and `refusal` (compared without case or underscores) and empty answers count as failures and make the companion exit non-zero. Hitting the turn limit is reported as a warning above the answer. grok has no stop reason of its own for the limit: in streaming mode it ends with `cancelled` and `num_turns` equal to `--max-turns`, which the companion recognises.
+
 ## FAQ
 
 **Do I need a separate Grok account?** No. The plugin uses your local Grok CLI authentication — browser login or `XAI_API_KEY`.

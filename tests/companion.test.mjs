@@ -174,6 +174,15 @@ test("transfer rejects transcripts outside ~/.claude/projects", () => {
   assert.match(result.stderr, /only from/);
 });
 
+test("a cancelled grok run makes the companion exit non-zero", () => {
+  const result = runCompanion(["task", "look", "around", "--json"], {
+    cwd: repoDir,
+    env: { ...baseEnv, FAKE_GROK_STREAM_OUTPUT: `${JSON.stringify({ type: "end", stopReason: "Cancelled", sessionId: "s" })}\n` }
+  });
+  assert.notEqual(result.status, 0, "Claude must see the failure in the exit code");
+  assert.equal(JSON.parse(result.stdout).stopReason, "Cancelled");
+});
+
 test("setup degrades gracefully when grok is missing", () => {
   const emptyBin = path.join(tempDir, "empty-bin");
   fs.mkdirSync(emptyBin, { recursive: true });

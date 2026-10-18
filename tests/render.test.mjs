@@ -62,6 +62,20 @@ test("renderTaskResult includes mode and session resume hint", () => {
   assert.match(rendered, /All tests pass\./);
 });
 
+test("renderTaskResult and renderReviewResult show a warning when grok sent one", () => {
+  const task = renderTaskResult(
+    { rawOutput: "partial", failureMessage: null, grokSessionId: null, warning: "grok hit its turn limit; the answer may be incomplete." },
+    { title: "Grok Task", jobId: null, write: false }
+  );
+  assert.match(task, /Warning: grok hit its turn limit/);
+
+  const review = renderReviewResult(
+    { result: { verdict: "approve", summary: "Fine.", findings: [], next_steps: [] }, rawOutput: "", parseError: null },
+    { reviewLabel: "Review", targetLabel: "working tree diff", grokSessionId: null, warning: "grok hit its turn limit; the answer may be incomplete." }
+  );
+  assert.match(review, /Warning: grok hit its turn limit/);
+});
+
 test("renderStatusReport handles empty and populated job lists", () => {
   assert.match(renderStatusReport({ jobs: [], totalJobs: 0, activeJobs: 0 }), /No jobs recorded/);
   const rendered = renderStatusReport({

@@ -48,6 +48,53 @@ export function writePromptFile(prompt) {
   };
 }
 
+// grok exits 0 even when it aborted the run: a failed device login came back
+// as {"text": "", "stopReason": "Cancelled"} with exit status 0 (measured
+// 2026-08-10, Projects/Grok). The CLI also mixes spellings -- "end_turn" next
+// to "Cancelled" -- so reasons are compared after normalising.
+const FAILURE_STOP_REASONS = new Set(["cancelled", "error", "refusal"]);
+
+export function normalizeStopReason(value) {
+  return String(value ?? "").replace(/[_\s-]/g, "").toLowerCase();
+}
+
+const TURN_LIMIT_WARNING = "grok hit its turn limit; the answer may be incomplete.";
+
+// Decides whether a run that exited cleanly actually produced an answer.
+// `failure` turns the run into an error; `warning` is passed through to the
+// caller without failing it.
+//
+// The turn limit has no stopReason of its own. Measured 2026-10-18 with
+// `--max-turns 1`: streaming-json ends with exit 0, stopReason "cancelled"
+// (lowercase) and num_turns equal to the limit; json mode exits 1 with
+// "Error: max turns reached" on stderr. "cancelled" is also what an aborted
+// sign-in returns, so the stopReason alone cannot tell them apart -- num_turns
+// reaching maxTurns does. "maxturns" stays recognised in case another grok
+// build spells it out.
+export function classifyCompletion({ stopReason, text, structuredOutput, numTurns, maxTurns }) {
+  const normalized = normalizeStopReason(stopReason);
+  const hasText = String(text ?? "").trim() !== "";
+  const hitTurnLimit =
+    normalized === "maxturns" ||
+    (normalized === "cancelled" && Number.isFinite(numTurns) && Number.isFinite(maxTurns) && numTurns >= maxTurns);
+
+  if (hitTurnLimit && (hasText || structuredOutput)) {
+    return { failure: null, warning: TURN_LIMIT_WARNING };
+  }
+  if (hitTurnLimit) {
+    return { failure: "grok hit its turn limit before it produced an answer.", warning: null };
+  }
+  if (FAILURE_STOP_REASONS.has(normalized)) {
+    const hint =
+      normalized === "cancelled" ? " Cancelled usually means grok could not authenticate; run /grok:setup." : "";
+    return { failure: `grok stopped the run (stopReason: ${stopReason}).${hint}`, warning: null };
+  }
+  if (!hasText && !structuredOutput) {
+    return { failure: `grok returned an empty response (stopReason: ${stopReason ?? "none"}).`, warning: null };
+  }
+  return { failure: null, warning: null };
+}
+
 // grok enforces `--sandbox` with a per-platform kernel mechanism, and on Linux
 // that mechanism is bubblewrap. When `bwrap` is missing grok does not warn and
 // continue -- it refuses to start:
@@ -207,15 +254,23 @@ function parseSingleJsonResult(stdout) {
   if (!raw) {
     return { error: "grok produced no output." };
   }
+  // The device-login flow prints plain text before the JSON body, so parse
+  // from the first line that opens an object.
+  const start = raw.search(/^\{/m);
+  const body = start > 0 ? raw.slice(start) : raw;
   try {
-    return { value: JSON.parse(raw) };
+    return { value: JSON.parse(body) };
   } catch {
     return { error: `grok produced unparseable output: ${truncate(raw, 400)}` };
   }
 }
 
+function newStreamResult() {
+  return { text: "", sessionId: null, stopReason: null, errorMessage: null, numTurns: null, costUsd: null };
+}
+
 function parseStreamEvents(stdout, onProgress) {
-  const result = { text: "", sessionId: null, stopReason: null, errorMessage: null };
+  const result = newStreamResult();
   for (const line of String(stdout ?? "").split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) {
@@ -243,6 +298,9 @@ function applyStreamEvent(result, event, onProgress) {
     case "end":
       result.sessionId = event.sessionId ?? result.sessionId;
       result.stopReason = event.stopReason ?? result.stopReason;
+      // The end event carries the turn count and cost (measured 2026-10-18).
+      result.numTurns = Number.isFinite(event.num_turns) ? event.num_turns : result.numTurns;
+      result.costUsd = typeof event.total_cost_usd === "number" ? event.total_cost_usd : result.costUsd;
       break;
     case "error":
       result.errorMessage = String(event.message ?? "grok reported an error.");
@@ -289,7 +347,7 @@ export function runGrokHeadless(cwd, options = {}) {
     let stdout = "";
     let stderr = "";
     let streamBuffer = "";
-    const streamResult = { text: "", sessionId: null, stopReason: null, errorMessage: null };
+    const streamResult = newStreamResult();
 
     options.onProgress?.({ phase: "started", detail: `grok pid ${child.pid}` });
 
@@ -321,7 +379,10 @@ export function runGrokHeadless(cwd, options = {}) {
       }
     });
 
-    child.on("error", (error) => {
+    // Every result carries the same fields, so callers never test for
+    // undefined. `stderr` is read at call time, after it has been collected.
+    // This goes through the cleaning `resolve` above, never `rawResolve`.
+    const finish = (fields) =>
       resolve({
         status: 1,
         text: "",
@@ -329,12 +390,19 @@ export function runGrokHeadless(cwd, options = {}) {
         stopReason: null,
         structuredOutput: null,
         stderr,
-        error: { message: `Failed to start grok: ${error.message}` }
+        warning: null,
+        costUsd: null,
+        error: null,
+        ...fields
       });
+
+    child.on("error", (error) => {
+      finish({ error: { message: `Failed to start grok: ${error.message}` } });
     });
 
     child.on("close", (code) => {
       const status = code ?? 1;
+      const exitFailure = status !== 0 ? truncate(stderr.trim(), 400) || `grok exited with status ${status}` : null;
 
       if (streaming) {
         if (streamBuffer.trim()) {
@@ -344,14 +412,21 @@ export function runGrokHeadless(cwd, options = {}) {
             // Trailing partial line; ignore.
           }
         }
-        const failure = streamResult.errorMessage ?? (status !== 0 ? truncate(stderr.trim(), 400) || `grok exited with status ${status}` : null);
-        resolve({
-          status,
+        const completion = classifyCompletion({
+          stopReason: streamResult.stopReason,
+          text: streamResult.text,
+          numTurns: streamResult.numTurns,
+          maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS
+        });
+        const failure = streamResult.errorMessage ?? exitFailure ?? completion.failure;
+        finish({
+          // A failure must never look like success to the caller's exit code.
+          status: failure && status === 0 ? 1 : status,
           text: streamResult.text,
           sessionId: streamResult.sessionId,
           stopReason: streamResult.stopReason,
-          structuredOutput: null,
-          stderr,
+          warning: failure ? null : completion.warning,
+          costUsd: streamResult.costUsd,
           error: failure ? { message: failure } : null
         });
         return;
@@ -359,29 +434,13 @@ export function runGrokHeadless(cwd, options = {}) {
 
       const parsed = parseSingleJsonResult(stdout);
       if (parsed.error) {
-        resolve({
-          status: status || 1,
-          text: "",
-          sessionId: null,
-          stopReason: null,
-          structuredOutput: null,
-          stderr,
-          error: { message: status !== 0 ? truncate(stderr.trim(), 400) || parsed.error : parsed.error }
-        });
+        finish({ status: status || 1, error: { message: exitFailure || parsed.error } });
         return;
       }
 
       const value = parsed.value;
       if (value.type === "error") {
-        resolve({
-          status: status || 1,
-          text: "",
-          sessionId: null,
-          stopReason: null,
-          structuredOutput: null,
-          stderr,
-          error: { message: String(value.message ?? "grok reported an error.") }
-        });
+        finish({ status: status || 1, error: { message: String(value.message ?? "grok reported an error.") } });
         return;
       }
 
@@ -394,14 +453,23 @@ export function runGrokHeadless(cwd, options = {}) {
         }
       }
 
-      resolve({
-        status,
+      const completion = classifyCompletion({
+        stopReason: value.stopReason,
+        text: value.text,
+        structuredOutput,
+        numTurns: value.num_turns,
+        maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS
+      });
+      const failure = exitFailure ?? completion.failure;
+      finish({
+        status: failure && status === 0 ? 1 : status,
         text: String(value.text ?? ""),
         sessionId: value.sessionId ?? null,
         stopReason: value.stopReason ?? null,
         structuredOutput,
-        stderr,
-        error: status !== 0 ? { message: truncate(stderr.trim(), 400) || `grok exited with status ${status}` } : null
+        warning: failure ? null : completion.warning,
+        costUsd: typeof value.total_cost_usd === "number" ? value.total_cost_usd : null,
+        error: failure ? { message: failure } : null
       });
     });
   });
