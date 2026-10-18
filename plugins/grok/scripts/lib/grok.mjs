@@ -16,6 +16,15 @@ export const REVIEW_TOOL_ALLOWLIST = "read_file,grep,list_dir";
 // direct file-mutation tools. Combined with `--sandbox read-only` (kernel
 // enforced where available) this keeps default rescues from editing files.
 export const TASK_READ_DISALLOWED_TOOLS = "search_replace,write";
+// grok's gateway to every MCP server configured in the user's grok. `--tools`
+// only allowlists *built-in* tools (grok --help: "Built-in tools to allow"), so
+// it does not remove these. Measured 2026-10-18 (grok 1.0.46): with
+// `--tools read_file,grep,list_dir` grok still reported read_file, list_dir,
+// grep, search_tool and use_tool, and search_tool returned real MCP tools
+// (including ones that delete data, load paid data or run JavaScript in a
+// browser page). With `--disallowed-tools search_tool,use_tool` added, grok
+// reported only read_file, list_dir and grep. Every mode therefore passes them.
+export const MCP_META_TOOLS = "search_tool,use_tool";
 
 const MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_MAX_TURNS = 50;
@@ -218,12 +227,14 @@ export function buildHeadlessArgs(options = {}) {
   switch (options.mode) {
     case "review":
       args.push("--tools", REVIEW_TOOL_ALLOWLIST);
+      args.push("--disallowed-tools", MCP_META_TOOLS);
       args.push("--always-approve");
       break;
     case "task-propose":
       // Proposal runs hand back a patch instead of editing: the review
       // allowlist (no shell, no edit tools) holds without any OS sandbox.
       args.push("--tools", REVIEW_TOOL_ALLOWLIST);
+      args.push("--disallowed-tools", MCP_META_TOOLS);
       args.push("--always-approve");
       break;
     case "task-read":
@@ -233,7 +244,8 @@ export function buildHeadlessArgs(options = {}) {
       if (sandboxed && !resuming) {
         args.push("--sandbox", "read-only");
       }
-      args.push("--disallowed-tools", TASK_READ_DISALLOWED_TOOLS);
+      // One combined value: whether grok accepts the flag twice is not measured.
+      args.push("--disallowed-tools", `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`);
       args.push("--always-approve");
       break;
     case "task-write":
@@ -248,6 +260,8 @@ export function buildHeadlessArgs(options = {}) {
       if (!resuming) {
         args.push("--sandbox", "workspace");
       }
+      // Code work never needs the user's MCP servers (decision 2026-10-18).
+      args.push("--disallowed-tools", MCP_META_TOOLS);
       args.push("--always-approve");
       break;
     default:

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Grok can no longer reach configured MCP servers from the companion.
+
+- `--tools` only allowlists built-in tools: with the review allowlist Grok still
+  had `search_tool`/`use_tool` and `search_tool` returned real MCP tools
+  (measured 2026-10-18, grok 1.0.46). Every mode now passes
+  `--disallowed-tools` with both; Grok then reported only `read_file`,
+  `list_dir` and `grep`.
+
 Grok can implement without writing.
 
 - New `task --propose` / `/grok:rescue --propose`: Grok runs with the review

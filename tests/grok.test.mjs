@@ -4,6 +4,7 @@ import path from "node:path";
 import { after, before, test } from "node:test";
 
 import {
+  MCP_META_TOOLS,
   PROMPT_ARG_MAX_CHARS,
   REVIEW_TOOL_ALLOWLIST,
   TASK_READ_DISALLOWED_TOOLS,
@@ -56,7 +57,7 @@ test("review mode enforces the read-only tool allowlist", () => {
 test("task-read mode combines sandbox and write-tool denylist", () => {
   const args = buildHeadlessArgs({ prompt: "investigate", mode: "task-read", sandboxEnforced: true });
   assert.equal(pairValue(args, "--sandbox"), "read-only");
-  assert.equal(pairValue(args, "--disallowed-tools"), TASK_READ_DISALLOWED_TOOLS);
+  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`);
   assert.equal(pairValue(args, "--output-format"), "streaming-json");
 });
 
@@ -76,7 +77,29 @@ test("task-propose mode uses the read-only review allowlist and no shell", () =>
   assert.equal(pairValue(args, "--tools"), REVIEW_TOOL_ALLOWLIST);
   assert.ok(args.includes("--always-approve"));
   assert.equal(args.includes("--sandbox"), false);
-  assert.equal(args.includes("--disallowed-tools"), false);
+  assert.equal(pairValue(args, "--disallowed-tools"), MCP_META_TOOLS);
+});
+
+// `--tools` only allowlists built-in tools; grok's MCP gateway (search_tool,
+// use_tool) stayed callable and reached the user's MCP servers (measured
+// 2026-10-18). Every mode has to remove both, in a single flag occurrence.
+test("every mode disallows grok's MCP meta tools exactly once", () => {
+  const schema = { type: "object" };
+  const cases = [
+    { mode: "review", jsonSchema: schema },
+    { mode: "task-propose", jsonSchema: schema },
+    { mode: "task-read" },
+    { mode: "task-write" }
+  ];
+  for (const extra of cases) {
+    const args = buildHeadlessArgs({ prompt: "x", sandboxEnforced: true, ...extra });
+    const occurrences = args.filter((a) => a === "--disallowed-tools").length;
+    assert.equal(occurrences, 1, `${extra.mode}: --disallowed-tools must appear exactly once`);
+    const values = pairValue(args, "--disallowed-tools").split(",");
+    for (const tool of ["search_tool", "use_tool"]) {
+      assert.ok(values.includes(tool), `${extra.mode} must disallow ${tool}`);
+    }
+  }
 });
 
 // Without a kernel enforcer grok refuses to start rather than warning, so a
@@ -84,7 +107,7 @@ test("task-propose mode uses the read-only review allowlist and no shell", () =>
 test("task-read drops the sandbox when the enforcer is missing, and keeps the deny list", () => {
   const args = buildHeadlessArgs({ prompt: "investigate", mode: "task-read", sandboxEnforced: false });
   assert.ok(!args.includes("--sandbox"), "an unenforceable sandbox flag must not be sent");
-  assert.equal(pairValue(args, "--disallowed-tools"), TASK_READ_DISALLOWED_TOOLS,
+  assert.equal(pairValue(args, "--disallowed-tools"), `${TASK_READ_DISALLOWED_TOOLS},${MCP_META_TOOLS}`,
     "the tool-level guard is what still stops writes");
 });
 

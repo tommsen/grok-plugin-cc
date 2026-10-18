@@ -111,7 +111,7 @@ Runs a Grok code review on your current work.
 /grok:review --background
 ```
 
-The review is read-only by construction: Grok runs with a tool allowlist of `read_file`, `grep`, and `list_dir` — no shell, no write tools, no subagents. Findings come back as structured JSON validated against a schema and are rendered verbatim.
+The review is read-only by construction: Grok runs with a tool allowlist of `read_file`, `grep`, and `list_dir` — no shell, no write tools, no subagents — and without its MCP gateway tools (`search_tool`, `use_tool`; see [Security Model](#security-model)). Findings come back as structured JSON validated against a schema and are rendered verbatim.
 
 All review prompts tell Grok to read `CLAUDE.md` and `AGENTS.md` at the repository root first and to treat their rules as review criteria.
 
@@ -218,6 +218,8 @@ So the plugin probes before it asks:
 The asymmetry is deliberate. A read-leaning rescue's primary guard is the tool deny list, which needs no kernel, so losing the sandbox costs one belt out of two. For `--write` the sandbox is the *only* thing keeping edits inside the workspace, and degrading that silently would hand an agent the whole disk — so it fails with `apt install -y bubblewrap` in the message.
 
 Override the probe with `GROK_COMPANION_SANDBOX=on|off` if your distro enforces through something we do not recognise, or if you have decided to accept the risk.
+
+**MCP servers are blocked in every mode.** `--tools` only allowlists Grok's *built-in* tools. Measured on 2026-10-18 (grok 1.0.46): with `--tools read_file,grep,list_dir` Grok still listed `search_tool` and `use_tool`, and `search_tool` returned tools of the MCP servers configured in the user's Grok — some of which delete data, load paid data or run JavaScript in a browser page. The companion therefore also passes `--disallowed-tools search_tool,use_tool` (merged into the existing deny list for `rescue`) in every mode, so Grok cannot reach those servers. With that flag Grok reported only `read_file`, `list_dir` and `grep`.
 
 The review commands are unaffected either way: their allowlist removes the shell entirely, so it holds everywhere, containers included. If you need hard guarantees for rescues, install the enforcer or run them in a disposable environment.
 
